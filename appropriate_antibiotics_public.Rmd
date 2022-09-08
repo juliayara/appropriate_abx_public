@@ -1,0 +1,508 @@
+---
+title: "appropriate_abx_public"
+author: "Julie Yarahuan"
+date: '2022-09-08'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Define Variables
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r,echo=FALSE, message=FALSE}
+#Load Libraries
+library(tidyr)
+library(tibble)
+library(dplyr)
+library(readr)
+library(lubridate)
+library(stringr)
+library(data.table)
+```
+
+```{r, echo=FALSE, message=FALSE}
+##Input your variables here##
+
+#File path variable: Input your file path here
+abxfile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Antibiotics.csv"
+culturefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Antibiogram/Positive Blood or Respiratory Cultures with organism.csv"
+
+#Load Datasets
+abxdata <- read_csv(abxfile)
+culturedata<-read_csv(culturefile)
+
+#column names for antibiotics table, make sure your data is in the below order: 
+#1=contact serial number (encounter ID), 2=MRN, 3=date of birth, 4= Admit DateTime, 5=Service Abbreviation, 6=Service description, 7=ICD10 code, 8=ICD 10 description,
+#9=Medication Order DateTime, 10=Medication route,11=Medication in Orderset/Powerplan, 12=allergy substance, 13=allergy type
+
+#rename columns in abx data
+abxdata<-abxdata %>%
+  rename(CSN=1) %>%
+  rename(MRN=2) %>%
+  rename(DOB=3) %>%
+  rename(AdmitDT=4) %>%
+  rename(Service=5) %>%
+  rename(ServiceDesc=6) %>%
+  rename(ICD=7) %>%
+  rename(ICDdesc=8) %>%
+  rename(MedDT=9) %>%
+  rename(Med=10) %>%
+  rename(MedRoute=11) %>%
+  rename(Orderset=12) %>%
+  rename(Allergy=13) %>%
+  rename(AllergyType=14)
+
+#column names for culture table, make sure your data is in the following order
+#1=MRN, 2=lab order, 3=Collection DT, 4= Organism, 5=suceptibility (eg. susceptble or resistant), 6= antibiotic susceptbility (antibiotic name), 7=susceptibility result DT
+
+#rename columns in culture data
+culturedata<-culturedata %>%
+  rename(MRN=1) %>%
+  rename(LabOrder=2)%>%
+  rename(CollectionDT=3)%>%
+  rename(Organism=4)%>%
+  rename(Susceptibility=5)%>%
+  rename(SusceptibilityAntibiotic=6)%>%
+  rename(SusceptibilityDT=7)
+
+```
+
+```{r,echo=FALSE}
+#Join Datasets
+
+#reformat MRN as numeric in culture dataset
+culturedata$MRN <- as.numeric(culturedata$MRN)
+
+#join abx with cultures
+abxculturedata= abxdata %>% left_join(culturedata,by="MRN")
+```
+
+```{r}
+#Show table to ensure columns & data are loaded and joined correctly
+head(abxculturedata)
+```
+
+```{r, echo=FALSE}
+################################# Clean Dataset ########################################
+
+#reformat date in culture dataset
+abxculturedata$CollectionDT<-mdy_hms(abxculturedata$CollectionDT)
+abxculturedata$SusceptibilityDT<-mdy_hms(abxculturedata$SusceptibilityDT)
+
+#reformat dates for admit DT and DOB
+abxculturedata$AdmitDT<-mdy_hms(abxculturedata$AdmitDT, truncated = 1)
+abxculturedata$DOB<-mdy(abxculturedata$DOB)
+
+#Calculate age in years at time of admission
+abxculturedata <- abxculturedata %>%
+  mutate(age=year(AdmitDT)-year(DOB))
+
+#calculate age in months at time of admission
+abxculturedata<-abxculturedata %>%
+  mutate(agemonths=interval(DOB,AdmitDT) %/% months(1))
+
+#define inpatient vs ED encounters
+abxculturedata<-abxculturedata %>%
+  mutate(servicelocation= if_else(Service=="EMR","Emergency","Inpatient",missing=NULL))
+
+#make text columns lowercase
+abxculturedata$ICDdesc=tolower(abxculturedata$ICDdesc)
+abxculturedata$Med=tolower(abxculturedata$Med)
+abxculturedata$Allergy=tolower(abxculturedata$Allergy)
+abxculturedata$SusceptibilityAntibiotic=tolower(abxculturedata$SusceptibilityAntibiotic)
+
+#Count unique starting CSNs
+csnunique <- unique(abxculturedata$CSN)
+#print("Total starting encounter count ")length(csnunique)
+paste("Total starting encounters",length(csnunique))
+
+```
+
+```{r}
+################################# Define guideline exclusions and guideline choices ########################################
+#Select services of interest
+servicesofinterest<-c('PMA','PMB','PMC','PMD','CCS','PUL','EMR','ADL') 
+
+#Ages to exclude (this guideline excludes children less than 3 months old)
+minagemonths=3
+
+#Co-morbid conditions to exclude (make all lowercase)
+exclusiondiagnoses=c("cystic fibrosis","sickle-cell","hb-ss","sickle cell","leukemia","lymphoma",'neoplasm','transplant',"tuberculosis",
+                     "tracheostomy","end stage renal","immunodeficiency",'immunodeficiencies','hypogammaglobulinemia','di george',
+                     "rheumatoid arthritis","lupus","muscular dystrophy","spinal muscular atrophy","Hypoplastic left heart syndrome",
+                     "pulmonary hypertension","cardiomyopathy","heart failure","abscess","cellulitis", "osteomyelitis",
+                     "mastoiditis","lymphangitis","sinusitis","streptococcal pharyngitis","impetigo","lymphadenitis",
+                     "omphalitis","aspiration","arthritis due to other bacteria","myositis","sinusitis",'pyelonephritis',"urinary tract infection")
+
+
+#filter out some common infections based on ICD prefixes
+#AO: exclude gastroenteritis/colitis, "B0*":exclude many viral infections, "J95.851":exclude ventilator assc PNA, "M00*":septic arthritis,  "M01*": septic arthritis,"N39*": exclude UTI
+exclusioninfections<-c("A0*","B0*","J95.851", "M00*","M01*","N39*")
+
+#filter out certain antimicrobials
+exclusionantimicrobials<- c('oseltamivir','bacitracin','nystatin','nystatin','valacyclovir','hydroxychloroquine','erythromycin')
+
+#identify list of pneumonia ICD codes of interest (these are the codes of pneumonia that you are INCLUDING in your table)
+pnalist<-c('J13', 'J13', 'J14', 'J14', 'J15.0', 'J15.0', 'J15.1', 'J15.1', 'J15.20', 'J15.20', 'J15.211', 'J15.211', 'J15.212', 'J15.212', 'J15.29', 'J15.29', 'J15.3', 'J15.3', 'J15.4', 'J15.4', 'J15.5', 'J15.5', 'J15.6', 'J15.6', 'J15.7', 'J15.7', 'J15.8', 'J15.8', 'J15.9', 'J15.9', 'J16.0', 'J16.0', 'J16.8', 'J17', 'J18.0', 'J18.1', 'J18.8', 'J18.9', 'J85.1', 'J95.851', 'J95.851')
+
+#define first line choices 
+#####first line is ampicillin or amox
+#####if PCN allergy then, ceftriaxone, clindamycin, cefdinir, levofloxacin
+#####if cephalosporin allergy then, levofloxacin, clindamycin
+#first line atypical coverage is azithromycin
+######if azithromycin allergy then levofloxacin or doxycycline
+firstline=c("amoxicillin","ampicillin")
+PCNallergy=c("amoxicillin","ampicillin",'penicillin','augmentin','penicillins','amoxicillin-clavulanate')
+ifPCNallergy=c("ceftriaxone","clindamycin","cefdinir",'levofloxacin')
+cephalosporinallergy=c("cefdinir","cefotaxime","ceftriaxone","cephalexin","cephalosporins")
+ifcephalosporinallergy=c("levofloxacin","clindamycin")
+atypicalfirstline="azithromycin"
+azithroallergy="azithromycin"
+atypicalwithazithroallergy=c("levofloxacin","doxycycline")
+
+#if over 4 then azithromycin is appropriate
+ageforazithro=4 
+
+```
+
+```{r}
+################################# Define culture exclusions ########################################
+
+#pcnresistance list
+narrowpcnsusceptibilitylist<-c("ampicillin","oxacillin",'Penicillin (meningitis)','Penicillin (non-meningitis)')
+broadpcnsuscetiblitylist<-c("ampicillin","oxacillin",'ampicillin/sulbactam','Penicillin (meningitis)','Penicillin (non-meningitis)')
+```
+
+```{r, echo=FALSE}
+################################# Apply guideline exclusions ########################################
+
+#eliminate patients less than your min exclusion age
+abxculturedata <- abxculturedata %>%
+  mutate(reasonforexclusions= if_else(
+    agemonths>=minagemonths,"included","below min age"))
+  
+#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
+
+#1505 pts
+
+#select services of interest
+abxculturedata <- abxculturedata %>%
+  mutate(reasonforexclusions= if_else(
+    (Service %in% servicesofinterest) &reasonforexclusions=="included","included",
+    if_else(reasonforexclusions=="below min age","below min age","excluded service")))
+
+#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
+
+#now have 1101 patients
+
+#filter diagnoses that have any of the excluded diagnoses
+excludelist<-abxculturedata %>%
+  select(CSN) %>%
+  filter(str_detect(abxculturedata$ICDdesc, paste(exclusiondiagnoses,collapse='|')))
+
+abxculturedata <- abxculturedata %>%
+  mutate(reasonforexclusions= if_else(
+    CSN %in% excludelist$CSN & reasonforexclusions=="included","excluded diagnosis",
+    if_else(reasonforexclusions=="below min age","below min age",if_else(reasonforexclusions=="excluded service","excluded service","included"))))
+
+#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
+
+
+#filter diagnoses that have any other common infections
+excludeinfectionlist<-abxculturedata %>%
+  select(CSN) %>%
+  filter(abxculturedata$ICD %like% paste(exclusioninfections,collapse = "|"))
+
+#apply exclude list
+abxculturedata <- abxculturedata %>%
+  mutate(reasonforexclusions= if_else(
+    CSN %in% excludeinfectionlist$CSN & reasonforexclusions=="included","excluded other common infection",
+    if_else(reasonforexclusions=="below min age","below min age",if_else(reasonforexclusions=="excluded service","excluded service",
+                                                                         if_else(reasonforexclusions=="excluded diagnosis","excluded diagnosis","included")
+                                  ))))
+#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
+
+#now have 891 patients
+
+#exclude selected antimicrobials from med list
+abxculturedata<-abxculturedata %>%
+  filter(!Med %in% exclusionantimicrobials)
+
+#count patients
+#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
+
+#now have 887 patients
+
+#pna subset
+pnasub<-abxculturedata %>%
+  select(CSN) %>%
+  filter(abxculturedata$ICD %in% pnalist)
+
+abxculturedata <- abxculturedata %>% 
+  mutate(reasonforexclusions= if_else(CSN %in% pnasub$CSN & reasonforexclusions=="included","included",if_else(reasonforexclusions=="excluded other common infection","excluded other common infection",
+    if_else(reasonforexclusions=="below min age","below min age",if_else(reasonforexclusions=="excluded service","excluded service",
+                                                                         if_else(reasonforexclusions=="excluded diagnosis","excluded diagnosis","no common pna diagnosis code")
+    )))))
+
+aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
+
+```
+
+## Apply Guidlines to label antibiotics
+
+
+
+```{r, echo=FALSE}
+################################# Apply guidelines to assess antibiotic choice ########################################
+
+#find first abx ordered at encounter
+abxchoice <- abxculturedata %>%
+  group_by(CSN) %>%
+  filter(
+    MedDT== min(MedDT, na.rm = T) & reasonforexclusions=="included"
+  ) 
+
+#create a blank column to store reasons abx are classified as incorrrect: 
+abxchoice <- abxchoice %>%
+  add_column(label = NA)
+
+#correct based on defined guidelines in definitions section
+abxchoice<-abxchoice %>%
+  mutate(correctinitialabx= if_else(
+    Med %in% firstline | 
+      #if allergy to pencillin, then Ceftriaxone, clinda, cefdinir or levofloxacin are correct
+      ((Allergy %in% PCNallergy)&(Med %in%ifPCNallergy)) |
+      #if cephalosporin allergy then clinda or levofloxacin
+      ((Allergy %in% cephalosporinallergy)&(Med %in% ifcephalosporinallergy)) |
+      #if over 4 then azithromycin correct
+      (age>ageforazithro & Med==atypicalfirstline) |
+      (age>ageforazithro &Allergy==azithroallergy & Med %in% atypicalwithazithroallergy )
+    ,1,0,missing=0))
+
+#add reasons for being incorrect
+abxchoice<-abxchoice %>%
+  mutate(label= if_else(
+    Med %in% firstline | 
+      #if allergy to pencillin, then Ceftriaxone, clinda, cefdinir or levofloxacin are correct
+      ((Allergy %in% PCNallergy)&(Med %in%ifPCNallergy)) |
+      #if cephalosporin allergy then clinda or levofloxacin
+      ((Allergy %in% cephalosporinallergy)&(Med %in% ifcephalosporinallergy)) |
+      #if over 4 then azithromycin correct
+      (age>ageforazithro & Med==atypicalfirstline) |
+      (age>ageforazithro &Allergy==azithroallergy & Med %in% atypicalwithazithroallergy )
+    ,"correct","incorrect abx without justification"))
+
+#take max of choice per patietn
+abxchoice<-abxchoice %>% group_by(CSN) %>% 
+  mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
+  ungroup()
+
+#summary of correct vs incorrect choices
+abxchoice %>%
+  group_by(finalcorrectinitialabx)%>%
+  summarise(count=n_distinct(CSN))
+
+
+```
+
+```{r}
+###################### Culture Results Analysis ##################
+
+#find history of positive culture preceeding abx order date
+abxchoice <- abxchoice %>%
+  mutate(hxposculture=NA)
+
+abxchoice<-abxchoice %>%
+  mutate(hxposculture= if_else(CollectionDT<AdmitDT,1,0,missing=NULL)) #1 if culture collected prior to admission
+
+#if hx pos culture resistant to penicillin and prescribed cephalosporin, clinda then correct 
+abxchoice<-abxchoice %>%
+  mutate(correctinitialabx= if_else(
+    ((hxposculture==1 & Susceptibility=='Resistant'&
+        (SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist)
+      &(Med=='cefTRIAXone'|Med=='clindamycin'|Med=='cefdinir'))|
+       (hxposculture==1 & Susceptibility=='Resistant'&(SusceptibilityAntibiotic %in%narrowpcnsusceptibilitylist))),1,correctinitialabx,correctinitialabx))
+
+abxchoice<-abxchoice %>%
+  mutate(label= if_else(
+    ((hxposculture==1 & Susceptibility=='Resistant'&
+        (SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist)
+      &(Med=='cefTRIAXone'|Med=='clindamycin'|Med=='cefdinir'))|
+       (hxposculture==1 & Susceptibility=='Resistant'&(SusceptibilityAntibiotic %in%narrowpcnsusceptibilitylist))),"prior resistant culture",label,label))
+
+
+#take max of choice per patietn
+abxchoice<-abxchoice %>% group_by(CSN) %>% 
+  mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
+  ungroup()
+
+#summary of correct vs incorrect choices
+abxchoice %>%
+  group_by(finalcorrectinitialabx)%>%
+  summarise(count=n_distinct(CSN))
+
+#summary of incorrect and correct choices
+abxchoicesummarized <-abxchoice%>%
+  group_by(finalcorrectinitialabx,Med)%>%
+  summarise(count=n_distinct(CSN))%>%
+  arrange(finalcorrectinitialabx,-count)
+
+```
+```{r}
+################################# get list of all remaining patients who are incorrect for NLP below ########################################
+
+#get CSN list of remaining "incorrect" patients
+csnlist<-abxchoice%>%
+  select(CSN)%>%
+  filter(abxchoice$finalcorrectinitialabx==0)
+csnlist<-unique(csnlist$CSN)
+
+#save CSN list as CSV
+
+write.csv(csnlist,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNList.csv", row.names = FALSE)
+```
+
+```{r}
+################################# Start NLP ########################################################
+
+#File path variable: Input your file path to note contents file here
+notefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteContents.csv"
+
+#Load Datasets
+notedata <- read_csv(notefile)
+
+#NoteData Columns
+#1=CSN, 2=NoteDT, 3=NoteType, 4=NoteText
+
+#rename columns
+notedata<-notedata %>%
+  rename(CSN=1) %>%
+  rename(NoteDT=2) %>%
+  rename(NoteType=3) %>%
+  rename(NoteText=4)
+
+#make text columns lowercase
+notedata$NoteType=tolower(notedata$NoteType)
+notedata$NoteText=str_replace_all(notedata$NoteText, "[^[:alnum:]]", " ")
+notedata$NoteText=tolower(notedata$NoteText)
+
+
+```
+
+
+```{r}
+################################# Create your NLP phrases ########################################################
+
+treatmentfailurephrases=c("treatment failure","failed outpatient treatment","failed outpatient therapy","failed outpatient antibiotics",
+                          "failure of outpatient treatment", "failure of outpatient therapy", "failure of outpatient amoxcillin"
+                          ,"failure of outpatient HD amoxicillin","failure of outpatient high dose amoxicillin,"
+                          ,"despite amoxicillin","despite outpatient antibiotics", "despite outpatient therapy", "despite outpatient treatmnet",
+                          "in spite of outpatient treatment","s p outpatient therapy","s p outpatient treatment","s p outpatient antibiotics",
+                          "s p outpatient amoxicillin", "started on amoxicillin as outpatient", "started on HD amoxicillin as outpatient",
+                          "started on high dose amoxicillin as outpatient","started on amoxicillin as an outpatient", "started on HD amoxicillin as an outpatient",
+                          "started on high dose amoxicillin as an outpatient")
+
+aspirationphrases=c("aspiration pneumonia","likely aspiration")
+
+unimmunizedphrases=c("unimmunized","unvaccinated","partially vaccinated","partially immunized")
+
+
+```
+
+
+```{r}
+################################# Apply NLP phrases ########################################################
+
+#apply treatment failure phrases
+treatmentfailure<-notedata %>%
+  select(CSN) %>%
+  filter(str_detect(notedata$NoteText, paste(treatmentfailurephrases,collapse='|')))
+
+#apply aspiration phrases
+aspiration<-notedata %>%
+  select(CSN) %>%
+  filter(str_detect(notedata$NoteText, paste(aspirationphrases,collapse='|')))
+
+#apply unimmunized phrases
+unimmunized<-notedata %>%
+  select(CSN) %>%
+  filter(str_detect(notedata$NoteText, paste(unimmunizedphrases,collapse='|')))
+
+######Summarize NLP findings ##########
+#count number of treatment feailures/aspirations/unimmunized
+n_distinct(treatmentfailure$CSN)
+n_distinct(aspiration$CSN)
+n_distinct(unimmunized$CSN)
+
+#get all CSNs from treatment failure list
+treatmentfailurecsnlist<-unique(treatmentfailure$CSN)
+aspirationcsnlist<-unique(aspiration$CSN)
+unimmunizedcsnlist<-unique(unimmunized$CSN)
+
+
+#if CSN in treatmnet failure list, assign to value of 2
+abxchoice<-abxchoice %>%
+  mutate(correctinitialabx= if_else(abxchoice$CSN %in% treatmentfailurecsnlist
+                                    ,2,correctinitialabx,correctinitialabx))
+
+abxchoice<-abxchoice %>%
+  mutate(label= if_else(abxchoice$CSN %in% treatmentfailurecsnlist
+                                    ,"outpatient treatment failure",label,label))
+
+#if CSN in aspiration list, assign to value of 3
+abxchoice<-abxchoice %>%
+  mutate(correctinitialabx= if_else(abxchoice$CSN %in% aspirationcsnlist
+                                    ,3,correctinitialabx,correctinitialabx))
+
+abxchoice<-abxchoice %>%
+  mutate(label= if_else(abxchoice$CSN %in% aspirationcsnlist
+                                    ,"aspiration pneumonia",label,label))
+
+#if CSN in unimmunized list, assign to value of 4
+abxchoice<-abxchoice %>%
+  mutate(correctinitialabx= if_else(abxchoice$CSN %in% unimmunizedcsnlist
+                                    ,4,correctinitialabx,correctinitialabx))
+abxchoice<-abxchoice %>%
+  mutate(label= if_else(abxchoice$CSN %in% unimmunizedcsnlist
+                                    ,"unimmunized",label,label))
+
+#take max of choice per patietn
+abxchoice<-abxchoice %>% group_by(CSN) %>% 
+  mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
+  ungroup()
+
+#summary of correct vs incorrectn vs treatment failure choices (0=incorrect, 1=correct, 2=outpatient treatmentfailure)
+abxchoice %>%
+  group_by(label)%>%
+  summarise(count=n_distinct(CSN))
+
+
+```
+
+```{r}
+################################# Apply additional guidelines based on above NLP ########################################################
+
+#define guidelinechoices (if hospitalized & unimmunized or failed outpatient treatment then--> Ceftriaxone, cefotaxime)
+optreatmentorunimmunized=c("ceftriaxone","cefotaxime")
+
+#apply guidelines
+abxchoice<-abxchoice %>%
+  mutate(correctinitialabx= if_else(servicelocation=="Inpatient"&(finalcorrectinitialabx==2 |finalcorrectinitialabx==4)&(Med %in% optreatmentorunimmunized),1,correctinitialabx,correctinitialabx))
+
+#max per patient   
+abxchoice<-abxchoice %>% group_by(CSN) %>% 
+  mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
+  ungroup()
+
+#summary of correct vs incorrectn vs treatment failure choices (0=incorrect, 1=correct, 2=outpatient treatmentfailure)
+abxchoice %>%
+  group_by(finalcorrectinitialabx)%>%
+  summarise(count=n_distinct(CSN))
+```
+
