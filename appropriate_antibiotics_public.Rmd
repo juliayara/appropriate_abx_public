@@ -11,9 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Define Variables
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
 
 ```{r,echo=FALSE, message=FALSE}
 #Load Libraries
@@ -24,6 +22,7 @@ library(readr)
 library(lubridate)
 library(stringr)
 library(data.table)
+library(tinytex)
 ```
 
 ```{r, echo=FALSE, message=FALSE}
@@ -124,26 +123,27 @@ paste("Total starting encounters",length(csnunique))
 
 ```
 
+#Define  guideline exclusions and guideline choices 
 ```{r}
-################################# Define guideline exclusions and guideline choices ########################################
 #Select services of interest
 servicesofinterest<-c('PMA','PMB','PMC','PMD','CCS','PUL','EMR','ADL') 
 
-#Ages to exclude (this guideline excludes children less than 3 months old)
+#Ages to exclude (e.g. this guideline excludes children less than 3 months old)
 minagemonths=3
 
 #Co-morbid conditions to exclude (make all lowercase)
 exclusiondiagnoses=c("cystic fibrosis","sickle-cell","hb-ss","sickle cell","leukemia","lymphoma",'neoplasm','transplant',"tuberculosis",
                      "tracheostomy","end stage renal","immunodeficiency",'immunodeficiencies','hypogammaglobulinemia','di george',
-                     "rheumatoid arthritis","lupus","muscular dystrophy","spinal muscular atrophy","Hypoplastic left heart syndrome",
-                     "pulmonary hypertension","cardiomyopathy","heart failure","abscess","cellulitis", "osteomyelitis",
-                     "mastoiditis","lymphangitis","sinusitis","streptococcal pharyngitis","impetigo","lymphadenitis",
-                     "omphalitis","aspiration","arthritis due to other bacteria","myositis","sinusitis",'pyelonephritis',"urinary tract infection")
+                     "rheumatoid arthritis","lupus","muscular dystrophy","spinal muscular atrophy","hypoplastic left heart syndrome",
+                     "pulmonary hypertension","cardiomyopathy","heart failure")
 
 
 #filter out some common infections based on ICD prefixes
 #AO: exclude gastroenteritis/colitis, "B0*":exclude many viral infections, "J95.851":exclude ventilator assc PNA, "M00*":septic arthritis,  "M01*": septic arthritis,"N39*": exclude UTI
 exclusioninfections<-c("A0*","B0*","J95.851", "M00*","M01*","N39*")
+exclusioninfections2=c("abscess","cellulitis", "osteomyelitis",
+                     "mastoiditis","lymphangitis","sinusitis","streptococcal pharyngitis","impetigo","lymphadenitis",
+                     "omphalitis","aspiration","arthritis due to other bacteria","myositis","sinusitis",'pyelonephritis')
 
 #filter out certain antimicrobials
 exclusionantimicrobials<- c('oseltamivir','bacitracin','nystatin','nystatin','valacyclovir','hydroxychloroquine','erythromycin')
@@ -158,9 +158,9 @@ pnalist<-c('J13', 'J13', 'J14', 'J14', 'J15.0', 'J15.0', 'J15.1', 'J15.1', 'J15.
 #first line atypical coverage is azithromycin
 ######if azithromycin allergy then levofloxacin or doxycycline
 firstline=c("amoxicillin","ampicillin")
-PCNallergy=c("amoxicillin","ampicillin",'penicillin','augmentin','penicillins','amoxicillin-clavulanate')
+PCNallergy=c("amoxicillin","ampicillin",'penicillin','augmentin','penicillins','amoxicillin-clavulanate') #list of meds that count as PCN allergy
 ifPCNallergy=c("ceftriaxone","clindamycin","cefdinir",'levofloxacin')
-cephalosporinallergy=c("cefdinir","cefotaxime","ceftriaxone","cephalexin","cephalosporins")
+cephalosporinallergy=c("cefdinir","cefotaxime","ceftriaxone","cephalexin","cephalosporins") #list of meds that count as cephalosporin allergy
 ifcephalosporinallergy=c("levofloxacin","clindamycin")
 atypicalfirstline="azithromycin"
 azithroallergy="azithromycin"
@@ -186,8 +186,6 @@ broadpcnsuscetiblitylist<-c("ampicillin","oxacillin",'ampicillin/sulbactam','Pen
 abxculturedata <- abxculturedata %>%
   mutate(reasonforexclusions= if_else(
     agemonths>=minagemonths,"included","below min age"))
-  
-#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
 
 #1505 pts
 
@@ -196,8 +194,6 @@ abxculturedata <- abxculturedata %>%
   mutate(reasonforexclusions= if_else(
     (Service %in% servicesofinterest) &reasonforexclusions=="included","included",
     if_else(reasonforexclusions=="below min age","below min age","excluded service")))
-
-#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
 
 #now have 1101 patients
 
@@ -211,13 +207,11 @@ abxculturedata <- abxculturedata %>%
     CSN %in% excludelist$CSN & reasonforexclusions=="included","excluded diagnosis",
     if_else(reasonforexclusions=="below min age","below min age",if_else(reasonforexclusions=="excluded service","excluded service","included"))))
 
-#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
-
-
 #filter diagnoses that have any other common infections
 excludeinfectionlist<-abxculturedata %>%
   select(CSN) %>%
   filter(abxculturedata$ICD %like% paste(exclusioninfections,collapse = "|"))
+
 
 #apply exclude list
 abxculturedata <- abxculturedata %>%
@@ -226,7 +220,16 @@ abxculturedata <- abxculturedata %>%
     if_else(reasonforexclusions=="below min age","below min age",if_else(reasonforexclusions=="excluded service","excluded service",
                                                                          if_else(reasonforexclusions=="excluded diagnosis","excluded diagnosis","included")
                                   ))))
-#aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x))) 
+
+#common infections exclusions list 2
+excludeinfectionlist2<-abxculturedata %>%
+  select(CSN) %>%
+  filter(str_detect(abxculturedata$ICDdesc, paste(exclusioninfections2,collapse='|')))
+
+abxculturedata <- abxculturedata %>%
+  mutate(reasonforexclusions= if_else(
+    CSN %in% excludeinfectionlist2$CSN & reasonforexclusions=="included","excluded other common infection",if_else(reasonforexclusions=="excluded other common infection","excluded other common infection",
+    if_else(reasonforexclusions=="below min age","below min age",if_else(reasonforexclusions=="excluded service","excluded service","included")))))
 
 #now have 891 patients
 
@@ -255,7 +258,6 @@ aggregate(CSN ~ reasonforexclusions, abxculturedata, function(x) length(unique(x
 ```
 
 ## Apply Guidlines to label antibiotics
-
 
 
 ```{r, echo=FALSE}
@@ -326,14 +328,14 @@ abxchoice<-abxchoice %>%
   mutate(correctinitialabx= if_else(
     ((hxposculture==1 & Susceptibility=='Resistant'&
         (SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist)
-      &(Med=='cefTRIAXone'|Med=='clindamycin'|Med=='cefdinir'))|
+      &(Med=='ceftriaxone'|Med=='clindamycin'|Med=='cefdinir'))|
        (hxposculture==1 & Susceptibility=='Resistant'&(SusceptibilityAntibiotic %in%narrowpcnsusceptibilitylist))),1,correctinitialabx,correctinitialabx))
 
 abxchoice<-abxchoice %>%
   mutate(label= if_else(
     ((hxposculture==1 & Susceptibility=='Resistant'&
         (SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist)
-      &(Med=='cefTRIAXone'|Med=='clindamycin'|Med=='cefdinir'))|
+      &(Med=='ceftriaxone'|Med=='clindamycin'|Med=='cefdinir'))|
        (hxposculture==1 & Susceptibility=='Resistant'&(SusceptibilityAntibiotic %in%narrowpcnsusceptibilitylist))),"prior resistant culture",label,label))
 
 
@@ -353,7 +355,9 @@ abxchoicesummarized <-abxchoice%>%
   summarise(count=n_distinct(CSN))%>%
   arrange(finalcorrectinitialabx,-count)
 
+aggregate(CSN ~ label, abxchoice, function(x) length(unique(x))) 
 ```
+
 ```{r}
 ################################# get list of all remaining patients who are incorrect for NLP below ########################################
 
