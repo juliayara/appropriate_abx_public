@@ -9,7 +9,7 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Define Variables
+# Define Variables
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
 
@@ -72,7 +72,7 @@ culturedata<-culturedata %>%
 
 ```
 
-```{r,echo=FALSE}
+```{r,echo=FALSE, message=FALSE}
 #Join Datasets
 
 #reformat MRN as numeric in culture dataset
@@ -82,7 +82,7 @@ culturedata$MRN <- as.numeric(culturedata$MRN)
 abxculturedata= abxdata %>% left_join(culturedata,by="MRN")
 ```
 
-```{r}
+```{r,echo=FALSE, message=FALSE}
 #Show table to ensure columns & data are loaded and joined correctly
 head(abxculturedata)
 ```
@@ -124,8 +124,8 @@ paste("Total starting encounters: ",length(csnunique))
 
 ```
 
-#Define  guideline exclusions and guideline choices 
-```{r}
+## Define  guideline exclusions and guideline choices 
+```{r, echo=FALSE}
 #Select services of interest
 servicesofinterest<-c('PMA','PMB','PMC','PMD','CCS','PUL','EMR','ADL') 
 
@@ -172,7 +172,7 @@ ageforazithro=4
 
 ```
 
-```{r}
+```{r, echo=FALSE}
 ################################# Define culture exclusions ########################################
 
 #pcnresistance list
@@ -180,6 +180,10 @@ narrowpcnsusceptibilitylist<-c("ampicillin","oxacillin",'Penicillin (meningitis)
 broadpcnsuscetiblitylist<-c("ampicillin","oxacillin",'ampicillin/sulbactam','Penicillin (meningitis)','Penicillin (non-meningitis)')
 ```
 
+# Output
+
+
+## Summary of reasons for exlusion
 ```{r, echo=FALSE}
 ################################# Apply guideline exclusions ########################################
 #eliminate patients less than your min exclusion age
@@ -250,10 +254,12 @@ exclusionsummarytable<-setNames(aggregate(CSN ~ reasonforexclusions, abxcultured
 
 grandtotal<-c("Grand Total",length(unique(abxculturedata$CSN)))
 exclusionsummarytable<-rbind(exclusionsummarytable,grandtotal)
+
+
 exclusionsummarytable
 
 ```
-```{r, echo=FALSE}
+```{r, echo=FALSE,message=FALSE, results=FALSE}
 ################################# Apply guidelines to assess antibiotic choice ########################################
 
 #find first abx ordered at encounter
@@ -294,11 +300,14 @@ abxchoice<-abxchoice %>%
 maxabxchoice<-abxchoice %>% group_by(CSN) %>% top_n(1,correctinitialabx)
   
 #summary of correct vs incorrect choices
-maxabxchoice %>%
+summarytable1<-maxabxchoice %>%
   group_by(correctinitialabx)%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()
 
+correctlabels<-c("Incorrect", "Correct")
+
+cbind(correctlabels,summarytable1)
 
 #Summary of labels (please note that the "correct" count may be higher on this because many patients are ordered for both azithromycin and a first line antibiotic at the same time so the same patient will be in two separate label categories. This does not change the correct/incorrect count)
 maxabxchoice%>%
@@ -308,8 +317,8 @@ maxabxchoice%>%
 
 ```
 
-
-```{r}
+## Summary of Correct/Incorrect Orders with Labels [Pre-NLP Analysis]
+```{r,echo=FALSE}
 ###################### Culture Results Analysis ##################
 
 #find history of positive culture preceeding abx order date
@@ -337,20 +346,21 @@ maxabxchoice<-maxabxchoice %>%
 maxabxchoice<-abxchoice %>% group_by(CSN) %>% top_n(1,correctinitialabx)
 
 #summary of correct vs incorrect choices
-maxabxchoice %>%
+summarytable2<-maxabxchoice %>%
   group_by(correctinitialabx)%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()
 
+correctlabels<-c("Incorrect", "Correct")
+
+cbind(correctlabels,summarytable2)
+
 aggregate(CSN ~ label, maxabxchoice, function(x) length(unique(x))) 
 ```
 
-```{r}
-
-```
 
 
-```{r}
+```{r, echo=FALSE}
 ################################# get list of all remaining patients who are incorrect for NLP below ########################################
 
 #get CSN list of remaining "incorrect" patients
@@ -362,7 +372,7 @@ csnlist<-unique(csnlist$CSN)
 write.csv(csnlist,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNList.csv", row.names = FALSE)
 ```
 
-```{r}
+```{r,echo=FALSE, message=FALSE}
 ################################# Start NLP ########################################################
 
 #File path variable: Input your file path to note contents file here
@@ -390,7 +400,7 @@ notedata$NoteText=tolower(notedata$NoteText)
 ```
 
 
-```{r}
+```{r, echo=FALSE,message=FALSE}
 ################################# Create your NLP phrases ########################################################
 
 treatmentfailurephrases=c("treatment failure","failed outpatient treatment","failed outpatient therapy","failed outpatient antibiotics",
@@ -410,8 +420,8 @@ unimmunizedphrases=c("unimmunized","unvaccinated","partially vaccinated","partia
 
 ```
 
-
-```{r}
+## Summary of NLP findings
+```{r,echo=FALSE,message=FALSE}
 ################################# Apply NLP phrases ########################################################
 
 #apply treatment failure phrases
@@ -428,12 +438,6 @@ aspiration<-notedata %>%
 unimmunized<-notedata %>%
   select(CSN) %>%
   filter(str_detect(notedata$NoteText, paste(unimmunizedphrases,collapse='|')))
-
-######Summarize NLP findings ##########
-#count number of treatment feailures/aspirations/unimmunized
-n_distinct(treatmentfailure$CSN)
-n_distinct(aspiration$CSN)
-n_distinct(unimmunized$CSN)
 
 #get all CSNs from treatment failure list
 treatmentfailurecsnlist<-unique(treatmentfailure$CSN)
@@ -478,10 +482,14 @@ maxabxchoice<-maxabxchoice %>% group_by(CSN) %>%
   mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
   ungroup()
 
+maxabxchoice %>%
+  group_by(correctinitialabx)%>%
+  summarise(count=n_distinct(CSN))%>%
+  ungroup()
 
 ```
-
-```{r}
+## Summary of NLP after applying additional guidelines for unimunized patients
+```{r,echo=FALSE,message=FALSE}
 ################################# Apply additional guidelines based on above NLP ########################################################
 
 #define guidelinechoices (if hospitalized & unimmunized or failed outpatient treatment then--> Ceftriaxone, cefotaxime)
@@ -499,16 +507,14 @@ maxabxchoice<-maxabxchoice %>% group_by(CSN) %>%
 
 #summary of correct vs incorrectn vs treatment failure choices (0=incorrect, 1=correct, 2=outpatient treatmentfailure
 #summary of correct vs incorrect choices
-summarytable2<-maxabxchoice %>%
+summarytable3<-maxabxchoice %>%
   group_by(correctinitialabx)%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()
 
-summarytable2
+rowlabesl<-c("Likely Incorrect","Correct","Outpatient Treatment Failure","Aspiration Pneumonia")
 
-rowlabesl<-c("Likely Incorrect","Correct","Outpatient Treatment Failure","Aspiration Pneumonia","Unimmunized")
-
-#cbind(rowlabesl,summarytable2)
+cbind(rowlabesl,summarytable3)
 
 aggregate(CSN ~ label, maxabxchoice, function(x) length(unique(x))) 
 ```
