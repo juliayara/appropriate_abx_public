@@ -115,6 +115,7 @@ abxculturedata$ICDdesc=tolower(abxculturedata$ICDdesc)
 abxculturedata$Med=tolower(abxculturedata$Med)
 abxculturedata$Allergy=tolower(abxculturedata$Allergy)
 abxculturedata$SusceptibilityAntibiotic=tolower(abxculturedata$SusceptibilityAntibiotic)
+abxculturedata$Susceptibility=tolower(abxculturedata$Susceptibility)
 
 #Count unique starting CSNs
 csnunique <- unique(abxculturedata$CSN)
@@ -252,8 +253,6 @@ exclusionsummarytable<-rbind(exclusionsummarytable,grandtotal)
 exclusionsummarytable
 
 ```
-
-
 ```{r, echo=FALSE}
 ################################# Apply guidelines to assess antibiotic choice ########################################
 
@@ -261,8 +260,7 @@ exclusionsummarytable
 abxchoice <- abxculturedata %>%
   group_by(CSN) %>%
   filter(
-    MedDT== min(MedDT, na.rm = T) & reasonforexclusions=="included"
-  ) 
+    MedDT== min(MedDT, na.rm = T) & reasonforexclusions=="included") 
 
 #create a blank column to store reasons abx are classified as incorrrect: 
 abxchoice <- abxchoice %>%
@@ -270,95 +268,93 @@ abxchoice <- abxchoice %>%
 
 #correct based on defined guidelines in definitions section
 abxchoice<-abxchoice %>%
-  mutate(correctinitialabx= if_else(
-    Med %in% firstline | 
-      #if allergy to pencillin, then Ceftriaxone, clinda, cefdinir or levofloxacin are correct
-      ((Allergy %in% PCNallergy)&(Med %in%ifPCNallergy)) |
-      #if cephalosporin allergy then clinda or levofloxacin
-      ((Allergy %in% cephalosporinallergy)&(Med %in% ifcephalosporinallergy)) |
-      #if over 4 then azithromycin correct
-      (age>ageforazithro & Med==atypicalfirstline) |
-      (age>ageforazithro &Allergy==azithroallergy & Med %in% atypicalwithazithroallergy )
-    ,1,0,missing=0))
+  ungroup()%>%
+  mutate(correctinitialabx=case_when(
+    Med %in% firstline ~1,
+    (Allergy %in% PCNallergy & Med %in% ifPCNallergy)~1,#if allergy to pencillin, then Ceftriaxone, clinda, cefdinir or levofloxacin are correct
+    (Allergy %in% cephalosporinallergy & Med %in% ifcephalosporinallergy)~1,#if cephalosporin allergy then clinda or levofloxacin
+    (age>ageforazithro & Med==atypicalfirstline)~1,#if over 4 then azithromycin correct,
+    (age>ageforazithro & Allergy==azithroallergy & Med %in% atypicalwithazithroallergy)~1, #if over 4 and has azithro allergy
+    TRUE~0
+  ))
 
 #add reasons for being incorrect
 abxchoice<-abxchoice %>%
-  mutate(label= if_else(
-    Med %in% firstline | 
-      #if allergy to pencillin, then Ceftriaxone, clinda, cefdinir or levofloxacin are correct
-      ((Allergy %in% PCNallergy)&(Med %in%ifPCNallergy)) |
-      #if cephalosporin allergy then clinda or levofloxacin
-      ((Allergy %in% cephalosporinallergy)&(Med %in% ifcephalosporinallergy)) |
-      #if over 4 then azithromycin correct
-      (age>ageforazithro & Med==atypicalfirstline) |
-      (age>ageforazithro &Allergy==azithroallergy & Med %in% atypicalwithazithroallergy )
-    ,"correct","incorrect abx without justification"))
+  ungroup()%>%
+  mutate(label=case_when(
+    Med %in% firstline ~"First Line Choice",
+    (Allergy %in% PCNallergy & Med %in% ifPCNallergy)~"Correct substitute i/s/o PCN allergy",
+    (Allergy %in% cephalosporinallergy & Med %in% ifcephalosporinallergy)~"Correct substitute i/s/o cephalosporin allergy",
+    (age>ageforazithro & Med==atypicalfirstline)~"Appropriate age for Azithro use",
+    (age>ageforazithro & Allergy==azithroallergy & Med %in% atypicalwithazithroallergy)~"Appropriate age for azithro with appropriate azithro subs i/s/o   Azithro allergy",
+    TRUE~"Likely incorrect abx"
+  ))
 
-#take max of choice per patietn
-abxchoice<-abxchoice %>% group_by(CSN) %>% 
-  mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
+#take max of choice per patietn (this eliminates rows that look false [e.g. patient with multiple drug allergies, recorded as 'incorrect' for one allergy but correct for another])
+maxabxchoice<-abxchoice %>% group_by(CSN) %>% top_n(1,correctinitialabx)
+  
+#summary of correct vs incorrect choices
+maxabxchoice %>%
+  group_by(correctinitialabx)%>%
+  summarise(count=n_distinct(CSN))%>%
   ungroup()
 
-#summary of correct vs incorrect choices
-abxchoice %>%
-  group_by(finalcorrectinitialabx)%>%
-  summarise(count=n_distinct(CSN))
 
+#Summary of labels (please note that the "correct" count may be higher on this because many patients are ordered for both azithromycin and a first line antibiotic at the same time so the same patient will be in two separate label categories. This does not change the correct/incorrect count)
+maxabxchoice%>%
+  group_by(label)%>%
+  summarise(count=n_distinct(CSN))%>%
+  ungroup()
 
 ```
+
 
 ```{r}
 ###################### Culture Results Analysis ##################
 
 #find history of positive culture preceeding abx order date
-abxchoice <- abxchoice %>%
+maxabxchoice <- maxabxchoice %>%
   mutate(hxposculture=NA)
 
-abxchoice<-abxchoice %>%
-  mutate(hxposculture= if_else(CollectionDT<AdmitDT,1,0,missing=NULL)) #1 if culture collected prior to admission
+maxabxchoice<-maxabxchoice %>%
+  mutate(hxposculture= if_else(CollectionDT<AdmitDT,1,0,missing=0)) #1 if culture collected prior to admission
 
-#if hx pos culture resistant to penicillin and prescribed cephalosporin, clinda then correct 
-abxchoice<-abxchoice %>%
-  mutate(correctinitialabx= if_else(
-    ((hxposculture==1 & Susceptibility=='Resistant'&
-        (SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist)
-      &(Med=='ceftriaxone'|Med=='clindamycin'|Med=='cefdinir'))|
-       (hxposculture==1 & Susceptibility=='Resistant'&(SusceptibilityAntibiotic %in%narrowpcnsusceptibilitylist))),1,correctinitialabx,correctinitialabx))
+maxabxchoice<-maxabxchoice %>%
+  mutate(correctinitialabx=case_when(
+    (correctinitialabx==0 & hxposculture==1 & Susceptibility=='Resistant'& SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist   & (Med=='ceftriaxone'|Med=='clindamycin'|Med=='cefdinir'|Med=='cephalexin')) ~1,
+     (correctinitialabx==0 &hxposculture==1 & Susceptibility=='Resistant'& SusceptibilityAntibiotic %in% narrowpcnsusceptibilitylist   & (Med=='ceftriaxone'|Med=='cephalexin'|Med=='cefdinir'|Med=='amoxicillin-clavulanate'|Med=='ampicillin-sulbactam')) ~1,
+    TRUE~correctinitialabx
+  ))
 
-abxchoice<-abxchoice %>%
-  mutate(label= if_else(
-    ((hxposculture==1 & Susceptibility=='Resistant'&
-        (SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist)
-      &(Med=='ceftriaxone'|Med=='clindamycin'|Med=='cefdinir'))|
-       (hxposculture==1 & Susceptibility=='Resistant'&(SusceptibilityAntibiotic %in%narrowpcnsusceptibilitylist))),"prior resistant culture",label,label))
-
+maxabxchoice<-maxabxchoice %>%
+  mutate(label=case_when(
+    (correctinitialabx==0 & hxposculture==1 & Susceptibility=='Resistant'& SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist   & (Med=='ceftriaxone'|Med=='clindamycin'|Med=='cefdinir'|Med=='cephalexin')) ~"Prior Resistant Culture",
+     (correctinitialabx==0 &hxposculture==1 & Susceptibility=='Resistant'& SusceptibilityAntibiotic %in% narrowpcnsusceptibilitylist   & (Med=='ceftriaxone'|Med=='cephalexin'|Med=='cefdinir'|Med=='amoxicillin-clavulanate'|Med=='ampicillin-sulbactam')) ~"Prior Resistant Culture",
+    TRUE~label
+  ))
 
 #take max of choice per patietn
-abxchoice<-abxchoice %>% group_by(CSN) %>% 
-  mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
-  ungroup()
+maxabxchoice<-abxchoice %>% group_by(CSN) %>% top_n(1,correctinitialabx)
 
 #summary of correct vs incorrect choices
-abxchoice %>%
-  group_by(finalcorrectinitialabx)%>%
-  summarise(count=n_distinct(CSN))
-
-#summary of incorrect and correct choices
-abxchoicesummarized <-abxchoice%>%
-  group_by(finalcorrectinitialabx,Med)%>%
+maxabxchoice %>%
+  group_by(correctinitialabx)%>%
   summarise(count=n_distinct(CSN))%>%
-  arrange(finalcorrectinitialabx,-count)
+  ungroup()
 
-aggregate(CSN ~ label, abxchoice, function(x) length(unique(x))) 
+aggregate(CSN ~ label, maxabxchoice, function(x) length(unique(x))) 
 ```
+
+```{r}
+
+```
+
 
 ```{r}
 ################################# get list of all remaining patients who are incorrect for NLP below ########################################
 
 #get CSN list of remaining "incorrect" patients
-csnlist<-abxchoice%>%
-  select(CSN)%>%
-  filter(abxchoice$finalcorrectinitialabx==0)
+csnlist<-maxabxchoice[maxabxchoice$correctinitialabx == 0, ]
 csnlist<-unique(csnlist$CSN)
 
 #save CSN list as CSV
@@ -399,17 +395,18 @@ notedata$NoteText=tolower(notedata$NoteText)
 
 treatmentfailurephrases=c("treatment failure","failed outpatient treatment","failed outpatient therapy","failed outpatient antibiotics",
                           "failure of outpatient treatment", "failure of outpatient therapy", "failure of outpatient amoxcillin"
-                          ,"failure of outpatient HD amoxicillin","failure of outpatient high dose amoxicillin,"
-                          ,"despite amoxicillin","despite outpatient antibiotics", "despite outpatient therapy", "despite outpatient treatmnet",
+                          ,"failure of outpatient HD amoxicillin","failure of outpatient high dose amoxicillin","failure of outpatient high-dose amoxicillin"
+                          ,"despite amoxicillin","despite outpatient antibiotics", "despite outpatient therapy", "despite outpatient treatment",
                           "in spite of outpatient treatment","s p outpatient therapy","s p outpatient treatment","s p outpatient antibiotics",
-                          "s p outpatient amoxicillin", "started on amoxicillin as outpatient", "started on HD amoxicillin as outpatient",
-                          "started on high dose amoxicillin as outpatient","started on amoxicillin as an outpatient", "started on HD amoxicillin as an outpatient",
-                          "started on high dose amoxicillin as an outpatient")
+                          "s p outpatient amoxicillin","sp outpatient therapy","sp outpatient treatment","sp outpatient antibiotics",
+                          "sp outpatient amoxicillin", "s/p outpatient therapy","s/p outpatient treatment","s/p outpatient antibiotics",
+                          "s/p outpatient amoxicillin","started on amoxicillin as outpatient", "started on HD amoxicillin as outpatient",
+                          "started on high dose amoxicillin as outpatient","started on amoxicillin as an outpatient", 
+                          "started on HD amoxicillin as an  outpatient","started on high dose amoxicillin as an outpatient")
 
-aspirationphrases=c("aspiration pneumonia","likely aspiration")
+aspirationphrases=c("aspiration pneumonia","likely aspiration", "aspiration event")
 
 unimmunizedphrases=c("unimmunized","unvaccinated","partially vaccinated","partially immunized")
-
 
 ```
 
@@ -445,40 +442,41 @@ unimmunizedcsnlist<-unique(unimmunized$CSN)
 
 
 #if CSN in treatmnet failure list, assign to value of 2
-abxchoice<-abxchoice %>%
-  mutate(correctinitialabx= if_else(abxchoice$CSN %in% treatmentfailurecsnlist
+maxabxchoice<-maxabxchoice %>%
+  ungroup()%>%
+  mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% treatmentfailurecsnlist
                                     ,2,correctinitialabx,correctinitialabx))
 
-abxchoice<-abxchoice %>%
-  mutate(label= if_else(abxchoice$CSN %in% treatmentfailurecsnlist
+maxabxchoice<-maxabxchoice %>%
+  ungroup()%>%
+  mutate(label= if_else(maxabxchoice$CSN %in% treatmentfailurecsnlist
                                     ,"outpatient treatment failure",label,label))
 
 #if CSN in aspiration list, assign to value of 3
-abxchoice<-abxchoice %>%
-  mutate(correctinitialabx= if_else(abxchoice$CSN %in% aspirationcsnlist
+maxabxchoice<-maxabxchoice %>%
+  ungroup()%>%
+  mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% aspirationcsnlist
                                     ,3,correctinitialabx,correctinitialabx))
 
-abxchoice<-abxchoice %>%
-  mutate(label= if_else(abxchoice$CSN %in% aspirationcsnlist
+maxabxchoice<-maxabxchoice %>%
+  ungroup()%>%
+  mutate(label= if_else(maxabxchoice$CSN %in% aspirationcsnlist
                                     ,"aspiration pneumonia",label,label))
 
 #if CSN in unimmunized list, assign to value of 4
-abxchoice<-abxchoice %>%
-  mutate(correctinitialabx= if_else(abxchoice$CSN %in% unimmunizedcsnlist
+maxabxchoice<-maxabxchoice %>%
+  ungroup()%>%
+  mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% unimmunizedcsnlist
                                     ,4,correctinitialabx,correctinitialabx))
-abxchoice<-abxchoice %>%
-  mutate(label= if_else(abxchoice$CSN %in% unimmunizedcsnlist
+maxabxchoice<-maxabxchoice %>%
+  ungroup()%>%
+  mutate(label= if_else(maxabxchoice$CSN %in% unimmunizedcsnlist
                                     ,"unimmunized",label,label))
 
 #take max of choice per patietn
-abxchoice<-abxchoice %>% group_by(CSN) %>% 
+maxabxchoice<-maxabxchoice %>% group_by(CSN) %>% 
   mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
   ungroup()
-
-#summary of correct vs incorrectn vs treatment failure choices (0=incorrect, 1=correct, 2=outpatient treatmentfailure)
-abxchoice %>%
-  group_by(label)%>%
-  summarise(count=n_distinct(CSN))
 
 
 ```
@@ -490,17 +488,28 @@ abxchoice %>%
 optreatmentorunimmunized=c("ceftriaxone","cefotaxime")
 
 #apply guidelines
-abxchoice<-abxchoice %>%
+maxabxchoice<-maxabxchoice %>%
   mutate(correctinitialabx= if_else(servicelocation=="Inpatient"&(finalcorrectinitialabx==2 |finalcorrectinitialabx==4)&(Med %in% optreatmentorunimmunized),1,correctinitialabx,correctinitialabx))
 
 #max per patient   
-abxchoice<-abxchoice %>% group_by(CSN) %>% 
+maxabxchoice<-maxabxchoice %>% group_by(CSN) %>% 
   mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
   ungroup()
 
-#summary of correct vs incorrectn vs treatment failure choices (0=incorrect, 1=correct, 2=outpatient treatmentfailure)
-abxchoice %>%
-  group_by(finalcorrectinitialabx)%>%
-  summarise(count=n_distinct(CSN))
+
+#summary of correct vs incorrectn vs treatment failure choices (0=incorrect, 1=correct, 2=outpatient treatmentfailure
+#summary of correct vs incorrect choices
+summarytable2<-maxabxchoice %>%
+  group_by(correctinitialabx)%>%
+  summarise(count=n_distinct(CSN))%>%
+  ungroup()
+
+summarytable2
+
+rowlabesl<-c("Likely Incorrect","Correct","Outpatient Treatment Failure","Aspiration Pneumonia","Unimmunized")
+
+#cbind(rowlabesl,summarytable2)
+
+aggregate(CSN ~ label, maxabxchoice, function(x) length(unique(x))) 
 ```
 
