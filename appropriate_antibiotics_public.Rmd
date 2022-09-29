@@ -372,11 +372,14 @@ csnlist<-unique(csnlist$CSN)
 write.csv(csnlist,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNList.csv", row.names = FALSE)
 ```
 
+
+
 ```{r,echo=FALSE, message=FALSE}
 ################################# Start NLP ########################################################
 
 #File path variable: Input your file path to note contents file here
 notefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteContents.csv"
+
 
 #Load Datasets
 notedata <- read_csv(notefile)
@@ -395,7 +398,6 @@ notedata<-notedata %>%
 notedata$NoteType=tolower(notedata$NoteType)
 notedata$NoteText=str_replace_all(notedata$NoteText, "[^[:alnum:]]", " ")
 notedata$NoteText=tolower(notedata$NoteText)
-
 
 ```
 
@@ -419,6 +421,13 @@ aspirationphrases=c("aspiration pneumonia","likely aspiration", "aspiration even
 unimmunizedphrases=c("unimmunized","unvaccinated","partially vaccinated","partially immunized")
 
 ```
+
+```{r, echo=FALSE, message=FALSE}
+
+
+
+```
+
 
 ## Summary of NLP findings
 ```{r,echo=FALSE,message=FALSE}
@@ -488,6 +497,39 @@ maxabxchoice %>%
   ungroup()
 
 ```
+
+```{r}
+############ get phrase's ID and note context around phrases ########
+
+######combine all phrases and CSN's#######3
+allNLP_phrases<-c(paste(treatmentfailurephrases,collapse = "|"),paste(aspirationphrases,collapse = "|"),paste(unimmunizedphrases,collapse = "|"))
+all_CSN_NLP_list<-c(treatmentfailurecsnlist,aspirationcsnlist,unimmunizedcsnlist)
+#make new columns
+notedata<-notedata%>%
+  mutate(startposition="NA")
+notedata<-notedata%>%
+  mutate(endposition="NA")
+notedata<-notedata%>%
+  mutate(context="NA")
+
+#show phrase captured in column
+notedata<-notedata %>%
+  ungroup()%>%
+  mutate(identifiedphrase= if_else(notedata$CSN %in% all_CSN_NLP_list
+                                  ,str_extract(notedata$NoteText,paste(allNLP_phrases,collapse = "|")),"NA"))
+
+####for loop 
+for(i in 1:nrow(notedata)) {       # for-loop over rows
+ notedata$startposition[i]<-((str_locate(notedata$NoteText[i],notedata$identifiedphrase[i])[,1])-120)
+ notedata$endposition[i]<-((str_locate(notedata$NoteText[i],notedata$identifiedphrase[i])[,2])+120)
+ notedata$context[i]=str_sub(notedata$NoteText[i],start=(notedata$startposition[i]),end=(notedata$endposition[i]))
+}
+
+#######Next step to create some summary statistics & presentation for the context & phrases
+
+```
+
+
 ## Summary of NLP after applying additional guidelines for unimunized patients
 ```{r,echo=FALSE,message=FALSE}
 ################################# Apply additional guidelines based on above NLP ########################################################
