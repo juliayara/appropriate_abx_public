@@ -530,16 +530,16 @@ optreatmentorunimmunized=c("ceftriaxone","cefotaxime")
 
 #apply guidelines
 maxabxchoice<-maxabxchoice %>%
-  mutate(correctinitialabx= if_else(servicelocation=="Inpatient"&(finalcorrectinitialabx==2 |finalcorrectinitialabx==4)&(Med %in% optreatmentorunimmunized),1,correctinitialabx,correctinitialabx))
+  mutate(correctinitialabx= if_else(servicelocation=="Inpatient"&(correctinitialabx==2 |correctinitialabx==4)&(Med %in% optreatmentorunimmunized),1,correctinitialabx,correctinitialabx))
 
 #max per patient   
 maxabxchoice<-maxabxchoice %>% group_by(CSN) %>% 
-  mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
+  mutate(correctinitialabx= max(correctinitialabx)) %>%
   ungroup()
 
 #take max of choice per patietn
 maxabxchoice<-maxabxchoice %>% group_by(CSN) %>% 
-  mutate(finalcorrectinitialabx= max(correctinitialabx)) %>%
+  mutate(correctinitialabx= max(correctinitialabx)) %>%
   ungroup()
 
 maxabxchoice %>%
