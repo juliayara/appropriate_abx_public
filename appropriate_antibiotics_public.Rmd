@@ -30,7 +30,7 @@ library(tinytex)
 
 #File path variable: Input your file path here
 abxfile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Antibiotics.csv"
-culturefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Antibiogram/Positive Blood or Respiratory Cultures with organism.csv"
+culturefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Antibiogram/Automated Algorithm//Positive Blood or Respiratory Cultures with organism.csv"
 
 #Load Datasets
 abxdata <- read_csv(abxfile)
@@ -271,7 +271,8 @@ abxchoice <- abxculturedata %>%
 
 #create a blank column to store reasons abx are classified as incorrrect: 
 abxchoice <- abxchoice %>%
-  add_column(label = NA)
+  add_column(label = NA)%>%
+  add_column(labeldetailed=NA)
 
 #correct based on defined guidelines in definitions section
 abxchoice<-abxchoice %>%
@@ -285,10 +286,14 @@ abxchoice<-abxchoice %>%
     TRUE~0
   ))
 
-#add reasons for being incorrect
+#add reasons for being correct
 abxchoice<-abxchoice %>%
   ungroup()%>%
-  mutate(label=case_when(
+    mutate(label=case_when(
+    correctinitialabx==1 ~"Correct",TRUE
+    ~"Likely incorrect abx"
+  ))%>%
+  mutate(labeldetailed=case_when(
     Med %in% firstline ~"First line choice",
     (Allergy %in% PCNallergy & Med %in% ifPCNallergy)~"Correct substitute i/s/o PCN allergy",
     (Allergy %in% cephalosporinallergy & Med %in% ifcephalosporinallergy)~"Correct substitute i/s/o cephalosporin allergy",
@@ -302,20 +307,21 @@ maxabxchoice<-abxchoice %>% group_by(CSN) %>% top_n(1,correctinitialabx)
   
 #summary of correct vs incorrect choices
 summarytable1<-maxabxchoice %>%
-  group_by(correctinitialabx)%>%
+  group_by(label)%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()
 
-correctlabels<-c("Incorrect", "Correct")
+summarytable1
 
-cbind(correctlabels,summarytable1)
 
 #Summary of labels (please note that the "correct" count may be higher on this because many patients are ordered for both azithromycin and a first line antibiotic at the same time so the same patient will be in two separate label categories. This does not change the correct/incorrect count)
-maxabxchoice%>%
-  group_by(label)%>%
+
+summarytable2<-maxabxchoice%>%
+  group_by(label,labeldetailed)%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()%>%
-  arrange(desc(count))
+  arrange(label,desc(count))
+summarytable2
 
 ```
 
@@ -338,10 +344,10 @@ maxabxchoice<-maxabxchoice %>%
   ))
 
 maxabxchoice<-maxabxchoice %>%
-  mutate(label=case_when(
+  mutate(labeldetailed=case_when(
     (correctinitialabx==0 & hxposculture==1 & Susceptibility=='Resistant'& SusceptibilityAntibiotic %in% broadpcnsuscetiblitylist   & (Med=='ceftriaxone'|Med=='clindamycin'|Med=='cefdinir'|Med=='cephalexin')) ~"Prior Resistant Culture",
      (correctinitialabx==0 &hxposculture==1 & Susceptibility=='Resistant'& SusceptibilityAntibiotic %in% narrowpcnsusceptibilitylist   & (Med=='ceftriaxone'|Med=='cephalexin'|Med=='cefdinir'|Med=='amoxicillin-clavulanate'|Med=='ampicillin-sulbactam')) ~"Prior Resistant Culture",
-    TRUE~label
+    TRUE~labeldetailed
   ))
 
 #take max of choice per patietn
@@ -349,15 +355,11 @@ maxabxchoice<-abxchoice %>% group_by(CSN) %>% top_n(1,correctinitialabx)
 
 #summary of correct vs incorrect choices
 summarytable2<-maxabxchoice %>%
-  group_by(correctinitialabx)%>%
+  group_by(label)%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()
+summarytable2
 
-correctlabels<-c("Incorrect", "Correct")
-
-cbind(correctlabels,summarytable2)
-
-aggregate(CSN ~ label, maxabxchoice, function(x) length(unique(x))) 
 ```
 
 
@@ -406,7 +408,7 @@ notedata$NoteText=tolower(notedata$NoteText)
 
 ```{r, echo=FALSE,message=FALSE}
 ################################# Create your NLP phrases ########################################################
-
+#treatment failure phrases
 treatmentfailurephrases=c("treatment failure","failed outpatient treatment","failed outpatient therapy","failed outpatient antibiotics",
                           "failure of outpatient treatment", "failure of outpatient therapy", "failure of outpatient amoxcillin"
                           ,"failure of outpatient HD amoxicillin","failure of outpatient high dose amoxicillin","failure of outpatient high-dose amoxicillin"
@@ -418,19 +420,37 @@ treatmentfailurephrases=c("treatment failure","failed outpatient treatment","fai
                           "started on high dose amoxicillin as outpatient","started on amoxicillin as an outpatient", 
                           "started on HD amoxicillin as an  outpatient","started on high dose amoxicillin as an outpatient")
 
+#negative treatment failure phrases
+negtreatmentfailureprefix<-c("no","unlikely","less likely","did not", "has not", "didn't","hasn't", "has not yet","hasn't yet","did not yet", "didn't yet")
+negtreatmentfailure<-levels(interaction(negtreatmentfailureprefix,treatmentfailurephrases,sep = ' '))
+
+#aspiration phrases
 aspirationphrases=c("aspiration pneumonia","likely aspiration", "aspiration event")
+#negative aspiration phrases
+negaspirationprefix=c("unlikely","less likely","is unlikely","is less likely","no","not likely","reassuring against","no concern for","am not concerned for","no history of","no recent episodes of")
+negaspirationphrases1<-levels(interaction(aspirationphrases,negaspirationprefix,sep=' '))
+negaspirationphrases2<-levels(interaction(negaspirationprefix,aspirationphrases,sep = ' '))
+negaspaspirationphrasescomb<-c(negaspirationphrases1,negaspirationphrases2)
 
-unimmunizedphrases=c("unimmunized","unvaccinated","partially vaccinated","partially immunized")
+#immunization phrases
+unimmunizedphrases=c("unimmunized","unvaccinated","partially vaccinated","partially immunized","not immunized","not fully immunized", "not up to date on immunizations", "immunizations not up to date", "immunizations are not up to date","not vaccinated")
 
+#critical illness phrases
 criticalillnessphrases=c("shock","critically ill","sepsis","critical illness","septic")
+negcriticalillnessprefix=c("no","not","not in","no signs of","no sign of","not concerned for","no concern for","reassured against","reassuring against","no evidence of","not suggestive of")
+negationcriticalillnessphrases=levels(interaction(negcriticalillnessprefix,criticalillnessphrases,sep = ' '))
 
+#pleural effusion
 pleuraleffusionphrases=c("moderate pleural effusion","large pleural effusion","moderate parapneumonic effusion","large parapneumonic effusion","loculated pleural effusion","complex pleural effusion")
+negpleuraleffprefix=c("no","no signs of a","no sign of a","not concerned for a","no concern for a","reassured against a","reassuring against a","no evidence of a","not suggestive of a")
+negplauraleff<-levels(interaction(negpleuraleffprefix,pleuraleffusionphrases,sep = ' '))
 
-immunesuppressionphrases=c("immunosuppressed","immunocompromised","immune compromised", "immune suppressed")
+#immunocomrpomised
+immunesuppressionphrases=c("immunosuppressed","immunocompromised","immune compromised", "immune suppressed","immunodeficiency","immunodeficient","immune deficiency","immune deficient")
+negimmunosuppprefix<-c("no","not","no signs of","no sign of","not concerned for","no concern for","reassured against","reassuring against","no evidence of","not suggestive of")
+negimmunosupp<-levels(interaction(negimmunosuppprefix,immunesuppressionphrases,sep = ' '))
 
 ```
-
-
 
 ## Summary of NLP findings
 ```{r,echo=FALSE,message=FALSE}
@@ -439,12 +459,12 @@ immunesuppressionphrases=c("immunosuppressed","immunocompromised","immune compro
 #apply treatment failure phrases
 treatmentfailure<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(treatmentfailurephrases,collapse='|')))
+  filter(str_detect(notedata$NoteText, paste(treatmentfailurephrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negtreatmentfailure,collapse = '|')))
 
 #apply aspiration phrases
 aspiration<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(aspirationphrases,collapse='|')))
+  filter(str_detect(notedata$NoteText, paste(aspirationphrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negaspaspirationphrasescomb,collapse = '|')))
 
 #apply unimmunized phrases
 unimmunized<-notedata %>%
@@ -454,17 +474,17 @@ unimmunized<-notedata %>%
 #apply critical illness phrases
 criticalillness<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(criticalillnessphrases,collapse='|')))
+  filter(str_detect(notedata$NoteText, paste(criticalillnessphrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negationcriticalillnessphrases,collapse = '|')))
 
 #apply pleural effusion phrases
 pleuraleffusion<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(pleuraleffusionphrases,collapse='|')))
+  filter(str_detect(notedata$NoteText, paste(pleuraleffusionphrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negplauraleff,collapse = '|')))
 
 #apply immune suppressed phrases
 immunesuppressed<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(immunesuppressionphrases,collapse='|')))
+  filter(str_detect(notedata$NoteText, paste(immunesuppressionphrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negimmunosupp,collapse = '|')))
 
 
 #get all CSNs from above lists
@@ -476,61 +496,75 @@ pleuraleffusioncsnlist<-unique(pleuraleffusion$CSN)
 immunosuppressedcsnlist<-unique(immunesuppressed$CSN)
 
 
-#if CSN in treatmnet failure list, assign to value of 2
+#if CSN in treatmnet failure list
 maxabxchoice<-maxabxchoice %>%
   ungroup()%>%
   mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% treatmentfailurecsnlist
                                     ,2,correctinitialabx,correctinitialabx)) %>%
   mutate(label= if_else(maxabxchoice$CSN %in% treatmentfailurecsnlist
-                                    ,"Outpatient treatment failure",label,label))
+                                    ,"Needs Review",label,label)) %>%
+  mutate(labeldetailed= if_else(maxabxchoice$CSN %in% treatmentfailurecsnlist
+                                    ,"Outpatient treatment failure",labeldetailed,labeldetailed))
 
-#if CSN in aspiration list, assign to value of 3
+#if CSN in aspiration list
 maxabxchoice<-maxabxchoice %>%
   ungroup()%>%
   mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% aspirationcsnlist
-                                    ,3,correctinitialabx,correctinitialabx)) %>%
+                                    ,2,correctinitialabx,correctinitialabx)) %>%
   mutate(label= if_else(maxabxchoice$CSN %in% aspirationcsnlist
-                                    ,"Aspiration pneumonia",label,label))
+                                    ,"Needs Review",label,label)) %>%
+  mutate(labeldetailed= if_else(maxabxchoice$CSN %in% aspirationcsnlist
+                                    ,"Aspiration pneumonia",labeldetailed,labeldetailed))
 
-#if CSN in unimmunized list, assign to value of 4
+#if CSN in unimmunized list
 maxabxchoice<-maxabxchoice %>%
   ungroup()%>%
   mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% unimmunizedcsnlist
-                                    ,4,correctinitialabx,correctinitialabx)) %>%
+                                    ,2,correctinitialabx,correctinitialabx)) %>%
   mutate(label= if_else(maxabxchoice$CSN %in% unimmunizedcsnlist
-                                    ,"Unimmunized",label,label))
+                                    ,"Needs Review",label,label))%>%
+  mutate(labeldetailed= if_else(maxabxchoice$CSN %in% unimmunizedcsnlist
+                                    ,"Unimmunized",labeldetailed,labeldetailed))
 
-#if CSN in critical illness list, assign to value of 5
+#if CSN in critical illness list
 maxabxchoice<-maxabxchoice %>%
   ungroup()%>%
   mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% criticalillnesscsnlist
-                                    ,5,correctinitialabx,correctinitialabx)) %>%
+                                    ,2,correctinitialabx,correctinitialabx)) %>%
   mutate(label= if_else(maxabxchoice$CSN %in% criticalillnesscsnlist
-                                    ,"Critically ill",label,label))
+                                    ,"Needs Review",label,label))%>%
+  mutate(labeldetailed= if_else(maxabxchoice$CSN %in% criticalillnesscsnlist
+                                    ,"Critically ill",labeldetailed,labeldetailed))
 
-#if CSN in pleural effusion list, assign to value of 6
+#if CSN in pleural effusion list
 maxabxchoice<-maxabxchoice %>%
   ungroup()%>%
   mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% pleuraleffusioncsnlist
-                                    ,6,correctinitialabx,correctinitialabx)) %>%
+                                    ,2,correctinitialabx,correctinitialabx)) %>%
   mutate(label= if_else(maxabxchoice$CSN %in% pleuraleffusioncsnlist
-                                    ,"Large/Complicated Pleural Effusion",label,label))
+                                    ,"Needs Review",label,label))%>%
+  mutate(labeldetailed= if_else(maxabxchoice$CSN %in% pleuraleffusioncsnlist
+                                    ,"Large/Complicated Pleural Effusion",labeldetailed,labeldetailed))
 
-#if CSN in immunoesuppressed list, assign to value of 7
+#if CSN in immunoesuppressed list
 maxabxchoice<-maxabxchoice %>%
   ungroup()%>%
   mutate(correctinitialabx= if_else(maxabxchoice$CSN %in% immunosuppressedcsnlist
-                                    ,7,correctinitialabx,correctinitialabx)) %>%
+                                    ,2,correctinitialabx,correctinitialabx)) %>%
   mutate(label= if_else(maxabxchoice$CSN %in% immunosuppressedcsnlist
-                                    ,"Immunocomprosed",label,label))
+                                    ,"Needs Review",label,label))%>%
+  mutate(labeldetailed= if_else(maxabxchoice$CSN %in% immunosuppressedcsnlist
+                                    ,"Large/Complicated Pleural Effusion",labeldetailed,labeldetailed))
 
 
-#define guidelinechoices (if hospitalized & unimmunized or failed outpatient treatment then--> Ceftriaxone, cefotaxime)
-optreatmentorunimmunized=c("ceftriaxone","cefotaxime")
+#define guidelinechoices (if unimmunized then--> Ceftriaxone, cefotaxime, cefdinir, levofloxacin)
+optreatmentorunimmunized=c("ceftriaxone","cefotaxime","cefdinir","levofloxacin")
 
-#apply guidelines
+#apply guidelines for unimmunized patient
 maxabxchoice<-maxabxchoice %>%
-  mutate(correctinitialabx= if_else(servicelocation=="Inpatient"&(correctinitialabx==2 |correctinitialabx==4)&(Med %in% optreatmentorunimmunized),1,correctinitialabx,correctinitialabx))
+  mutate(correctinitialabx= if_else((labeldetailed=="Unimmunized")&(Med %in% optreatmentorunimmunized),1,correctinitialabx,correctinitialabx))%>%
+  mutate(label= if_else((labeldetailed=="Unimmunized")&(Med %in% optreatmentorunimmunized),"Correct",label,label))%>%
+  mutate(labeldetailed= if_else((labeldetailed=="Unimmunized")&(Med %in% optreatmentorunimmunized),"Correct substitute for unimmunzed",labeldetailed,labeldetailed))
 
 #max per patient   
 maxabxchoice<-maxabxchoice %>% group_by(CSN) %>% 
@@ -543,16 +577,16 @@ maxabxchoice<-maxabxchoice %>% group_by(CSN) %>%
   ungroup()
 
 maxabxchoice %>%
-  group_by(correctinitialabx,label)%>%
+  group_by(label)%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()%>%
   arrange(desc(count))
 
 maxabxchoice %>%
-  group_by(correctinitialabx)%>%
+  group_by(label,labeldetailed)%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()%>%
-  arrange(desc(count))
+  arrange(label,desc(count))
 
 ```
 
@@ -595,6 +629,9 @@ notedatacontext<-notedata%>%
   select(CSN,NoteDT,NoteType,identifiedphrase,context,)
 
 notedatacontext
+#save CSN list as CSV
+
+write.csv(notedatacontext,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataContext.csv", row.names = FALSE)
 
 ```
 
