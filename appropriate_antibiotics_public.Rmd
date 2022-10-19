@@ -641,4 +641,17 @@ write.csv(notedatacontext,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fel
 
 ```
 
+```{r}
+#########TRAIN/TEST ONLY########
+
+#format output for manual review
+
+#review exclusions
+abxculturedata
+write.csv(abxculturedata,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = FALSE)
+
+#join main table with NLP note context
+trainreview= maxabxchoice %>% left_join(notedatacontext,by="CSN")
+write.csv(trainreview,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/TrainReview.csv", row.names = FALSE)
+```
 
