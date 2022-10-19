@@ -36,6 +36,12 @@ culturefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/
 abxdata <- read_csv(abxfile)
 culturedata<-read_csv(culturefile)
 
+#########TRAINING/TESTING ONLY############
+#import CSN list 2/3 split for training & filter data for those CSNs only
+csnlisttrain<-read_csv("/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNListTRAIN.csv")
+abxdata<-abxdata %>%
+  filter(`Contact Serial Number` %in% csnlisttrain$x)
+
 #column names for antibiotics table, make sure your data is in the below order: 
 #1=contact serial number (encounter ID), 2=MRN, 3=date of birth, 4= Admit DateTime, 5=Service Abbreviation, 6=Service description, 7=ICD10 code, 8=ICD 10 description,
 #9=Medication Order DateTime, 10=Medication route,11=Medication in Orderset/Powerplan, 12=allergy substance, 13=allergy type
