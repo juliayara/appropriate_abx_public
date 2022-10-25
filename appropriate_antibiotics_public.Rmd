@@ -236,14 +236,17 @@ abxculturedata <- abxculturedata %>%
 
 
 #exclude selected antimicrobials from med list
-excludemedlist<-abxculturedata %>%
-  select(CSN) %>%
+abxculturedata<-abxculturedata %>%
   filter(abxculturedata$Med %like% paste(exclusionantimicrobials,collapse="|"))
 
-abxculturedata <- abxculturedata %>%
-  mutate(reasonforexclusions= if_else(
-    CSN %in% excludemedlist$CSN & reasonforexclusions=="Included","Did not receive antibiotic",
-  if_else(reasonforexclusions!="Included",reasonforexclusions,"Included")))
+#excludemedlist<-abxculturedata %>%
+#  select(CSN) %>%
+#  filter(abxculturedata$Med %like% paste(exclusionantimicrobials,collapse="|"))
+
+#abxculturedata <- abxculturedata %>%
+#  mutate(reasonforexclusions= if_else(
+#    CSN %in% excludemedlist$CSN & reasonforexclusions=="Included","Did not receive antibiotic",
+#  if_else(reasonforexclusions!="Included",reasonforexclusions,"Included")))
 
 #pna subset
 pnasub<-abxculturedata %>%
@@ -264,6 +267,13 @@ exclusionsummarytable<-rbind(exclusionsummarytable,grandtotal)
 
 
 exclusionsummarytable
+
+
+
+#########FOR TRAIN VALIDATION ONLY########
+exclusions<-abxculturedata %>%
+  filter(reasonforexclusions!="Included")
+write.csv(exclusions,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = FALSE)
 
 ```
 ```{r, echo=FALSE,message=FALSE, results=FALSE}
