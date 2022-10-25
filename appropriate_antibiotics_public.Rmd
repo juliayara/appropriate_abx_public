@@ -236,17 +236,17 @@ abxculturedata <- abxculturedata %>%
 
 
 #exclude selected antimicrobials from med list
-abxculturedata<-abxculturedata %>%
-  filter(abxculturedata$Med %like% paste(exclusionantimicrobials,collapse="|"))
+abxculturedatanoexcludedmeds<-abxculturedata %>%
+  filter(!abxculturedata$Med %like% paste(exclusionantimicrobials,collapse="|"))
 
-#excludemedlist<-abxculturedata %>%
-#  select(CSN) %>%
-#  filter(abxculturedata$Med %like% paste(exclusionantimicrobials,collapse="|"))
+excludemedlist<-abxculturedata %>%
+  select(CSN) %>%
+  filter(!abxculturedata$CSN %in% abxculturedatanoexcludedmeds$CSN)
 
-#abxculturedata <- abxculturedata %>%
-#  mutate(reasonforexclusions= if_else(
-#    CSN %in% excludemedlist$CSN & reasonforexclusions=="Included","Did not receive antibiotic",
-#  if_else(reasonforexclusions!="Included",reasonforexclusions,"Included")))
+abxculturedata <- abxculturedata %>%
+  mutate(reasonforexclusions= if_else(
+    CSN %in% excludemedlist$CSN & reasonforexclusions=="Included","Did not receive antibiotic",
+  if_else(reasonforexclusions!="Included",reasonforexclusions,"Included")))
 
 #pna subset
 pnasub<-abxculturedata %>%
