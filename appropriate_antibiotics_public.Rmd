@@ -30,7 +30,7 @@ library(tinytex)
 
 #File path variable: Input your file path here
 abxfile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Antibiotics.csv"
-culturefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Antibiogram/Automated Algorithm//Positive Blood or Respiratory Cultures with organism.csv"
+culturefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Positive Blood or Respiratory Cultures with organism.csv"
 
 #Load Datasets
 abxdata <- read_csv(abxfile)
@@ -276,9 +276,15 @@ exclusions<-abxculturedata %>%
 write.csv(exclusions,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = FALSE)
 
 ```
+```{r}
+abxchoicetest<-abxchoice%>%
+  filter(reasonforexclusions=="Included")%>%
+  summarise(count=n_distinct(CSN))
+abxchoicetest
+```
+
 ```{r, echo=FALSE,message=FALSE, results=FALSE}
 ################################# Apply guidelines to assess antibiotic choice ########################################
-
 #find first abx ordered at encounter
 abxchoice <- abxculturedata %>%
   group_by(CSN) %>%
@@ -330,6 +336,7 @@ summarytable1<-maxabxchoice %>%
 summarytable1
 
 
+
 #Summary of labels (please note that the "correct" count may be higher on this because many patients are ordered for both azithromycin and a first line antibiotic at the same time so the same patient will be in two separate label categories. This does not change the correct/incorrect count)
 
 summarytable2<-maxabxchoice%>%
@@ -340,6 +347,8 @@ summarytable2<-maxabxchoice%>%
 summarytable2
 
 ```
+
+
 
 ## Summary of Correct/Incorrect Orders with Labels [Pre-NLP Analysis]
 ```{r,echo=FALSE}
@@ -416,8 +425,6 @@ notedata<-notedata %>%
 
 #make text columns lowercase
 notedata$NoteType=tolower(notedata$NoteType)
-notedata$NoteText=str_replace_all(notedata$NoteText, "[^[:alnum:]]", " ")
-notedata$NoteText=tolower(notedata$NoteText)
 
 ```
 
@@ -425,46 +432,27 @@ notedata$NoteText=tolower(notedata$NoteText)
 ```{r, echo=FALSE,message=FALSE}
 ################################# Create your NLP phrases ########################################################
 #treatment failure phrases
-treatmentfailurephrases=c("treatment failure","failed outpatient treatment","failed outpatient therapy","failed outpatient antibiotics",
-                          "failure of outpatient treatment", "failure of outpatient therapy", "failure of outpatient amoxcillin"
-                          ,"failure of outpatient HD amoxicillin","failure of outpatient high dose amoxicillin","failure of outpatient high-dose amoxicillin"
-                          ,"despite amoxicillin","despite outpatient antibiotics", "despite outpatient therapy", "despite outpatient treatment",
-                          "in spite of outpatient treatment","s p outpatient therapy","s p outpatient treatment","s p outpatient antibiotics",
-                          "s p outpatient amoxicillin","sp outpatient therapy","sp outpatient treatment","sp outpatient antibiotics",
-                          "sp outpatient amoxicillin", "s/p outpatient therapy","s/p outpatient treatment","s/p outpatient antibiotics",
-                          "s/p outpatient amoxicillin","started on amoxicillin as outpatient", "started on HD amoxicillin as outpatient",
-                          "started on high dose amoxicillin as outpatient","started on amoxicillin as an outpatient", 
-                          "started on HD amoxicillin as an  outpatient","started on high dose amoxicillin as an outpatient")
+treatmentfailurephrases<-"(?i)(?!unlikely\\b|less likely\\b|did not\\b|no\\b|has no\\b|didn't\\b|hasn't\\b|has not yet\\b|hasn't yet\\b|did not yet\\b|didn't yet\\b)(treatment failure|failed outpatient (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin|HD amoxicillin)|failure of outpatient (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|despite (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin |outpatient (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin))|(?:in spite of|s p|sp|s/p) outpatient (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|started on (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin) as (?:outpatient|an outpatient))"
 
-#negative treatment failure phrases
-negtreatmentfailureprefix<-c("no","unlikely","less likely","did not", "has not", "didn't","hasn't", "has not yet","hasn't yet","did not yet", "didn't yet")
-negtreatmentfailure<-levels(interaction(negtreatmentfailureprefix,treatmentfailurephrases,sep = ' '))
+#NLP notes: 
+###"(?i)" at the beginning of the pattern indicates that the search should be case-insensitive
+###"(?!unlikely\\b|less likely\\b|did not\\b|has no\\b|didn't\\b|hasn't\\b|has not yet\\b|hasn't yet\\b|did not yet\\b|didn't yet\\b)" part of the pattern is a negative lookahead assertion that will cause the regular expression to fail if any of the specified substrings are present. This will prevent the regular expression from matching phrases that contain the words "unlikely", "less likely", "did not", "has no", "didn't", "hasn't", "has not yet", "hasn't yet", "did not yet", or "didn't yet".
+### (?:) non-capturing group to group together common parts of the phrases
 
 #aspiration phrases
-aspirationphrases=c("aspiration pneumonia","likely aspiration", "aspiration event")
-#negative aspiration phrases
-negaspirationprefix=c("unlikely","less likely","is unlikely","is less likely","no","not likely","reassuring against","no concern for","am not concerned for","no history of","no recent episodes of")
-negaspirationphrases1<-levels(interaction(aspirationphrases,negaspirationprefix,sep=' '))
-negaspirationphrases2<-levels(interaction(negaspirationprefix,aspirationphrases,sep = ' '))
-negaspaspirationphrasescomb<-c(negaspirationphrases1,negaspirationphrases2)
+aspirationphrases="(?i)(?<!unlikely\\b|less likely\\b|is unlikely\\b|is less likely\\b|no\\b|not likely\\b|reassuring against\\b|no concern for\\b|am not concerned for\\b|no history of\\b|no recent episodes of\\b)(aspiration pneumonia|likely aspiration|aspiration event)\\b"
 
 #immunization phrases
-unimmunizedphrases=c("unimmunized","unvaccinated","partially vaccinated","partially immunized","not immunized","not fully immunized", "not up to date on immunizations", "immunizations not up to date", "immunizations are not up to date","not vaccinated")
+unimmunizedphrases="(?i)unimmunized|unvaccinated|partially (vaccinated|immunized)|not (immunized|fully immunized|up to date on immunizations|vaccinated)|immunizations (not up to date|are not up to date)"
 
 #critical illness phrases
-criticalillnessphrases=c("shock","critically ill","sepsis","critical illness","septic")
-negcriticalillnessprefix=c("no","not","not in","no signs of","no sign of","not concerned for","no concern for","reassured against","reassuring against","no evidence of","not suggestive of")
-negationcriticalillnessphrases=levels(interaction(negcriticalillnessprefix,criticalillnessphrases,sep = ' '))
+criticalillnessphrases="(?i)(?:(?!no|not|not in|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of)\\b)(?:shock|critically ill|sepsis|critical illness|septic)"
 
 #pleural effusion
-pleuraleffusionphrases=c("moderate pleural effusion","large pleural effusion","moderate parapneumonic effusion","large parapneumonic effusion","loculated pleural effusion","complex pleural effusion")
-negpleuraleffprefix=c("no","no signs of a","no sign of a","not concerned for a","no concern for a","reassured against a","reassuring against a","no evidence of a","not suggestive of a")
-negplauraleff<-levels(interaction(negpleuraleffprefix,pleuraleffusionphrases,sep = ' '))
+pleuraleffusionphrases="(?i)(?<!no\\b|no signs of a\\b|no sign of a\\b|not concerned for a\\b|no concern for a\\b|reassured against a\\b|reassuring against a\\b|no evidence of a\\b|not suggestive of a\\b)\\b(moderate pleural effusion|large pleural effusion|moderate parapneumonic effusion|large parapneumonic effusion|loculated pleural effusion|complex pleural effusion)\\b"
 
 #immunocomrpomised
-immunesuppressionphrases=c("immunosuppressed","immunocompromised","immune compromised", "immune suppressed","immunodeficiency","immunodeficient","immune deficiency","immune deficient")
-negimmunosuppprefix<-c("no","not","no signs of","no sign of","not concerned for","no concern for","reassured against","reassuring against","no evidence of","not suggestive of")
-negimmunosupp<-levels(interaction(negimmunosuppprefix,immunesuppressionphrases,sep = ' '))
+immunesuppressionphrases="(?i)(?<!no\\b|not\\b|no signs of\\b|no sign of\\b|not concerned for\\b|no concern for\\b|reassured against\\b|reassuring against\\b|no evidence of\\b|not suggestive of\\b)\\b(immunosuppressed|immunocompromised|immune compromised|immune suppressed|immunodeficiency|immunodeficient|immune deficiency|immune deficient)\\b"
 
 ```
 
@@ -475,32 +463,32 @@ negimmunosupp<-levels(interaction(negimmunosuppprefix,immunesuppressionphrases,s
 #apply treatment failure phrases
 treatmentfailure<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(treatmentfailurephrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negtreatmentfailure,collapse = '|')))
+  filter(str_detect(notedata$NoteText, treatmentfailurephrases))
 
 #apply aspiration phrases
 aspiration<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(aspirationphrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negaspaspirationphrasescomb,collapse = '|')))
+  filter(str_detect(notedata$NoteText, aspirationphrases))
 
 #apply unimmunized phrases
 unimmunized<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(unimmunizedphrases,collapse='|')))
+  filter(str_detect(notedata$NoteText, unimmunizedphrases))
 
 #apply critical illness phrases
 criticalillness<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(criticalillnessphrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negationcriticalillnessphrases,collapse = '|')))
+  filter(str_detect(notedata$NoteText, criticalillnessphrases))
 
 #apply pleural effusion phrases
 pleuraleffusion<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(pleuraleffusionphrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negplauraleff,collapse = '|')))
+  filter(str_detect(notedata$NoteText, pleuraleffusionphrases))
 
 #apply immune suppressed phrases
 immunesuppressed<-notedata %>%
   select(CSN) %>%
-  filter(str_detect(notedata$NoteText, paste(immunesuppressionphrases,collapse='|'))&!str_detect(notedata$NoteText,paste(negimmunosupp,collapse = '|')))
+  filter(str_detect(notedata$NoteText, immunesuppressionphrases))
 
 
 #get all CSNs from above lists
