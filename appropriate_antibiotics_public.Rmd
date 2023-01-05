@@ -104,6 +104,7 @@ abxculturedata$SusceptibilityDT<-mdy_hms(abxculturedata$SusceptibilityDT)
 #reformat dates for admit DT and DOB
 abxculturedata$AdmitDT<-mdy_hms(abxculturedata$AdmitDT, truncated = 1)
 abxculturedata$DOB<-mdy(abxculturedata$DOB)
+abxculturedata$MedDT<-mdy_hms(abxculturedata$MedDT)
 
 #Calculate age in years at time of admission
 abxculturedata <- abxculturedata %>%
@@ -130,6 +131,14 @@ csnunique <- unique(abxculturedata$CSN)
 paste("Total starting encounters: ",length(csnunique))
 
 ```
+
+
+```{r}
+abxculturedatatest<-abxculturedata %>%
+  filter(abxculturedata$CSN==6122070797)
+abxculturedatatest
+```
+
 
 ## Define  guideline exclusions and guideline choices 
 ```{r, echo=FALSE}
@@ -179,6 +188,8 @@ ageforazithro=4
 
 ```
 
+
+
 ```{r, echo=FALSE}
 ################################# Define culture exclusions ########################################
 
@@ -188,7 +199,6 @@ broadpcnsuscetiblitylist<-c("ampicillin","oxacillin",'ampicillin/sulbactam','Pen
 ```
 
 # Output
-
 
 ## Summary of reasons for exlusion
 ```{r, echo=FALSE}
@@ -244,10 +254,15 @@ excludemedlist<-abxculturedata %>%
   select(CSN) %>%
   filter(!abxculturedata$CSN %in% abxculturedatanoexcludedmeds$CSN)
 
+#label "did not receive abx" only for patients who ONLY received one of the excluded medications and no other antimicrobial
 abxculturedata <- abxculturedata %>%
   mutate(reasonforexclusions= if_else(
     CSN %in% excludemedlist$CSN & reasonforexclusions=="Included","Did not receive antibiotic",
   if_else(reasonforexclusions!="Included",reasonforexclusions,"Included")))
+
+#filter out meds that are in the excluded list for patients who recieved other antimicrobials
+abxculturedata<-abxculturedata%>%
+  filter(!(!CSN %in% excludemedlist & Med %like% paste(exclusionantimicrobials,collapse="|")))
 
 #pna subset
 pnasub<-abxculturedata %>%
@@ -277,12 +292,17 @@ exclusions<-abxculturedata %>%
 write.csv(exclusions,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = FALSE)
 
 ```
+
+
+
+
 ```{r}
 abxchoicetest<-abxchoice%>%
   filter(reasonforexclusions=="Included")%>%
   summarise(count=n_distinct(CSN))
 abxchoicetest
 ```
+
 
 ```{r, echo=FALSE,message=FALSE, results=FALSE}
 ################################# Apply guidelines to assess antibiotic choice ########################################
@@ -347,6 +367,13 @@ summarytable2<-maxabxchoice%>%
   arrange(label,desc(count))
 summarytable2
 
+```
+
+```{r}
+abxculturedatatest<-abxchoice %>%
+  filter(CSN==6121563611)
+
+abxculturedatatest
 ```
 
 
