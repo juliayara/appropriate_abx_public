@@ -30,7 +30,7 @@ library(tinytex)
 ##Input your variables here##
 
 #File path variable: Input your file path here
-abxfile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Antibiotics.csv"
+abxfile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Antibiotics with Transfer History.csv"
 culturefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Positive Blood or Respiratory Cultures with organism.csv"
 
 #Load Datasets
@@ -44,8 +44,8 @@ abxdata<-abxdata %>%
   filter(`Contact Serial Number` %in% csnlisttrain$x)
 
 #column names for antibiotics table, make sure your data is in the below order: 
-#1=contact serial number (encounter ID), 2=MRN, 3=date of birth, 4= Admit DateTime, 5=Service Abbreviation, 6=Service description, 7=ICD10 code, 8=ICD 10 description,
-#9=Medication Order DateTime, 10=Medication route,11=Medication in Orderset/Powerplan, 12=allergy substance, 13=allergy type
+#1=contact serial number (encounter ID), 2=MRN, 3=date of birth, 4= Admit DateTime, 5=Discharge Service Abbreviation, 6= Discharge Service description, 7=Service on a given date, 8= date of service, 9=ICD10 code, 10=ICD 10 description,
+#11=Medication Order DateTime, 12=Medication, 13=allergy substance, 14=allergy type
 
 #rename columns in abx data
 abxdata<-abxdata %>%
@@ -53,14 +53,14 @@ abxdata<-abxdata %>%
   rename(MRN=2) %>%
   rename(DOB=3) %>%
   rename(AdmitDT=4) %>%
-  rename(Service=5) %>%
-  rename(ServiceDesc=6) %>%
-  rename(ICD=7) %>%
-  rename(ICDdesc=8) %>%
-  rename(MedDT=9) %>%
-  rename(Med=10) %>%
-  rename(MedRoute=11) %>%
-  rename(Orderset=12) %>%
+  rename(DischargeService=5) %>%
+  rename(DischargeServiceDesc=6) %>%
+  rename(BeddedService=7)%>%
+  rename(BeddedDate=8)%>%
+  rename(ICD=9) %>%
+  rename(ICDdesc=10) %>%
+  rename(MedDT=11) %>%
+  rename(Med=12) %>%
   rename(Allergy=13) %>%
   rename(AllergyType=14)
 
@@ -79,6 +79,12 @@ culturedata<-culturedata %>%
 
 ```
 
+```{r}
+#Count unique starting CSNs
+csnunique <- unique(abxdata$CSN)
+length(csnunique)
+```
+
 ```{r,echo=FALSE, message=FALSE}
 #Join Datasets
 
@@ -93,6 +99,8 @@ abxculturedata= abxdata %>% left_join(culturedata,by="MRN")
 #Show table to ensure columns & data are loaded and joined correctly
 head(abxculturedata)
 ```
+
+
 
 ```{r, echo=FALSE}
 ################################# Clean Dataset ########################################
@@ -116,7 +124,7 @@ abxculturedata<-abxculturedata %>%
 
 #define inpatient vs ED encounters
 abxculturedata<-abxculturedata %>%
-  mutate(servicelocation= if_else(Service=="EMR","Emergency","Inpatient",missing=NULL))
+  mutate(servicelocation= if_else(DischargeService=="EMR","Emergency","Inpatient",missing=NULL))
 
 #make text columns lowercase
 abxculturedata$ICDdesc=tolower(abxculturedata$ICDdesc)
@@ -124,20 +132,21 @@ abxculturedata$Med=tolower(abxculturedata$Med)
 abxculturedata$Allergy=tolower(abxculturedata$Allergy)
 abxculturedata$SusceptibilityAntibiotic=tolower(abxculturedata$SusceptibilityAntibiotic)
 abxculturedata$Susceptibility=tolower(abxculturedata$Susceptibility)
+```
 
+
+```{r, echo=FALSE}
 #Count unique starting CSNs
 csnunique <- unique(abxculturedata$CSN)
+length(csnunique)
+```
 
+
+```{r, echo=FALSE}
 paste("Total starting encounters: ",length(csnunique))
 
 ```
 
-
-```{r}
-abxculturedatatest<-abxculturedata %>%
-  filter(abxculturedata$CSN==6122070797)
-abxculturedatatest
-```
 
 
 ## Define  guideline exclusions and guideline choices 
@@ -145,11 +154,14 @@ abxculturedatatest
 #Select services of interest
 servicesofinterest<-c('PMA','PMB','PMC','PMD','CCS','PUL','EMR','ADL') 
 
+#services to exclude: this is to exclude patients who were admitted first to another service (like the ICU or a surgical service) and then transferred to PHM
+prePHMservicetoexclude<-c("Intermediate Care Program","Medicine Critical Care","Medical Intensive Care")
+
 #Ages to exclude (e.g. this guideline excludes children less than 3 months old)
 minagemonths=3
 
 #Co-morbid conditions to exclude (make all lowercase)
-exclusiondiagnoses=c("cystic fibrosis","sickle-cell","hb-ss","sickle cell","leukemia","lymphoma",'neoplasm','transplant',"tuberculosis",
+exclusiondiagnoses=c("cystic fibrosis","other specified congenital malformations of respiratory system","sickle-cell","hb-ss","sickle cell","leukemia","lymphoma",'neoplasm','transplant',"tuberculosis",
                      "tracheostomy","end stage renal","immunodeficiency",'immunodeficiencies','hypogammaglobulinemia','di george',
                      "rheumatoid arthritis","lupus","muscular dystrophy","spinal muscular atrophy","hypoplastic left heart syndrome",
                      "pulmonary hypertension","cardiomyopathy","heart failure")
@@ -190,6 +202,7 @@ ageforazithro=4
 
 
 
+
 ```{r, echo=FALSE}
 ################################# Define culture exclusions ########################################
 
@@ -208,11 +221,23 @@ abxculturedata <- abxculturedata %>%
   mutate(reasonforexclusions= if_else(
     agemonths>=minagemonths,"Included","Below min age"))
 
-#select services of interest
+
+#select services of interest (discharge service=PHM)
 abxculturedata <- abxculturedata %>%
   mutate(reasonforexclusions= if_else(
-    (Service %in% servicesofinterest) &reasonforexclusions=="Included","Included",
+    (DischargeService %in% servicesofinterest) &reasonforexclusions=="Included","Included",
     if_else(reasonforexclusions!="Included",reasonforexclusions,"Excluded service")))
+
+#filter out patients admitted to ICU/ICP before PHM
+excludeservicelist<-abxculturedata %>%
+  select(CSN) %>%
+  filter(abxculturedata$BeddedService %like% paste(prePHMservicetoexclude,collapse = "|"))
+
+#apply exclude list
+abxculturedata <- abxculturedata %>%
+  mutate(reasonforexclusions= if_else(
+    CSN %in% excludeservicelist$CSN & reasonforexclusions=="Included","Excluded service",
+    if_else(reasonforexclusions!="included",reasonforexclusions,"Included")))
 
 #filter diagnoses that have any of the excluded diagnoses
 excludelist<-abxculturedata %>%
@@ -287,20 +312,10 @@ exclusionsummarytable
 
 
 #########FOR TRAIN VALIDATION ONLY########
-exclusions<-abxculturedata %>%
-  filter(reasonforexclusions!="Included")
-write.csv(exclusions,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = FALSE)
+#exclusions<-abxculturedata %>%
+#  filter(reasonforexclusions!="Included")
+#write.csv(exclusions,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = #FALSE)
 
-```
-
-
-
-
-```{r}
-abxchoicetest<-abxchoice%>%
-  filter(reasonforexclusions=="Included")%>%
-  summarise(count=n_distinct(CSN))
-abxchoicetest
 ```
 
 
@@ -369,25 +384,18 @@ summarytable2
 
 ```
 
-```{r}
-abxculturedatatest<-abxchoice %>%
-  filter(CSN==6121563611)
-
-abxculturedatatest
-```
-
 
 
 ## Summary of Correct/Incorrect Orders with Labels [Pre-NLP Analysis]
 ```{r,echo=FALSE}
 ###################### Culture Results Analysis ##################
 
-#find history of positive culture preceeding abx order date
+#find history of positive culture preceeding current admission
 maxabxchoice <- maxabxchoice %>%
   mutate(hxposculture=NA)
 
 maxabxchoice<-maxabxchoice %>%
-  mutate(hxposculture= if_else(CollectionDT<AdmitDT,1,0,missing=0)) #1 if culture collected prior to admission
+  mutate(hxposculture= if_else(((CollectionDT<AdmitDT) & interval(AdmitDT, CollectionDT) %/% months(1) >-12),1,0)) #1 if culture collected before admission within the past 12 months
 
 maxabxchoice<-maxabxchoice %>%
   mutate(correctinitialabx=case_when(
@@ -465,13 +473,16 @@ treatmentfailurephrases<-"(?i)(?!unlikely\\b|less likely\\b|did not\\b|no\\b|has
 #NLP notes: 
 ###"(?i)" at the beginning of the pattern indicates that the search should be case-insensitive
 ###"(?!unlikely\\b|less likely\\b|did not\\b|has no\\b|didn't\\b|hasn't\\b|has not yet\\b|hasn't yet\\b|did not yet\\b|didn't yet\\b)" part of the pattern is a negative lookahead assertion that will cause the regular expression to fail if any of the specified substrings are present. This will prevent the regular expression from matching phrases that contain the words "unlikely", "less likely", "did not", "has no", "didn't", "hasn't", "has not yet", "hasn't yet", "did not yet", or "didn't yet".
-### (?:) non-capturing group to group together common parts of the phrases
+### (?:) non-capturing group to group together common parts of the phrases. 
+#****add more description about above
+#***add more description mandatory vs optional
+#*work through straightforward example
 
 #aspiration phrases
 aspirationphrases="(?i)(?<!unlikely\\b|less likely\\b|is unlikely\\b|is less likely\\b|no\\b|not likely\\b|reassuring against\\b|no concern for\\b|am not concerned for\\b|no history of\\b|no recent episodes of\\b)(aspiration pneumonia|likely aspiration|aspiration event)\\b"
 
 #immunization phrases
-unimmunizedphrases="(?i)unimmunized|unvaccinated|partially (vaccinated|immunized)|not (immunized|fully immunized|up to date on immunizations|vaccinated)|immunizations (not up to date|are not up to date)"
+unimmunizedphrases="(?i)unimmunized|unvaccinated|partially (vaccinated|immunized)|not (immunized|fully immunized|up to date on immunizations|vaccinated|fully vaccinated)|immunizations (not up to date|are not up to date|incomplete)|incomplete (immunizations|vaccinations)"
 
 #critical illness phrases
 criticalillnessphrases="(?i)(?:(?!no|not|not in|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of)\\b)(?:shock|critically ill|sepsis|critical illness|septic)"
@@ -674,7 +685,7 @@ write.csv(notedatacontext,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fel
 
 #review exclusions
 abxculturedata
-write.csv(abxculturedata,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = FALSE)
+#write.csv(abxculturedata,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = FALSE)
 
 #join main table with NLP note context
 trainreview= maxabxchoice %>% left_join(notedatacontext,by="CSN")
