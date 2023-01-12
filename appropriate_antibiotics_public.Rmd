@@ -434,7 +434,7 @@ csnlist<-unique(csnlist$CSN)
 
 #save CSN list as CSV
 
-write.csv(csnlist,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNList.csv", row.names = FALSE)
+#write.csv(csnlist,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNList.csv", row.names = FALSE)
 ```
 
 
@@ -464,36 +464,45 @@ notedata$NoteType=tolower(notedata$NoteType)
 
 ```
 
+```{r}
+#testing regex with word boundaries
+testingphrases<-"(?i)(RLL|RUL)\\s+(pneumonia)"
+
+testphrases<-notedata %>%
+  filter(str_detect(notedata$NoteText, testingphrases))
+```
 
 ```{r, echo=FALSE,message=FALSE}
 ################################# Create your NLP phrases ########################################################
 #treatment failure phrases
-treatmentfailurephrases<-"(?i)(?!unlikely\\b|less likely\\b|did not\\b|no\\b|has no\\b|didn't\\b|hasn't\\b|has not yet\\b|hasn't yet\\b|did not yet\\b|didn't yet\\b)(treatment failure|failed outpatient (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin|HD amoxicillin)|failure of outpatient (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|despite (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin |outpatient (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin))|(?:in spite of|s p|sp|s/p) outpatient (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|started on (?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin) as (?:outpatient|an outpatient))"
+treatmentfailurephrases<-"(?i)(?!unlikely|less likely|did not|no|has no|didn't|hasn't|has not yet|hasn't yet|did not yet|didn't yet)\\s+(treatment failure|failed outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin|HD amoxicillin)|failure of outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|despite\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin |outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin))|(?:in spite of |s p|sp|s/p)\\s+outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|started on\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)\\s+as\\s+(?:outpatient|an outpatient))"
 
 #NLP notes: 
 ###"(?i)" at the beginning of the pattern indicates that the search should be case-insensitive
-###"(?!unlikely\\b|less likely\\b|did not\\b|has no\\b|didn't\\b|hasn't\\b|has not yet\\b|hasn't yet\\b|did not yet\\b|didn't yet\\b)" part of the pattern is a negative lookahead assertion that will cause the regular expression to fail if any of the specified substrings are present. This will prevent the regular expression from matching phrases that contain the words "unlikely", "less likely", "did not", "has no", "didn't", "hasn't", "has not yet", "hasn't yet", "did not yet", or "didn't yet".
+###"(?!unlikely|less likely|did not|has no|didn't|hasn't|has not yet|hasn't yet|did not yet|didn't yet)" part of the pattern is a negative lookahead assertion that will cause the regular expression to fail if any of the specified substrings are present. This will prevent the regular expression from matching phrases that contain the words "unlikely", "less likely", "did not", "has no", "didn't", "hasn't", "has not yet", "hasn't yet", "did not yet", or "didn't yet".
 ### (?:) non-capturing group to group together common parts of the phrases. 
 #****add more description about above
 #***add more description mandatory vs optional
 #*work through straightforward example
+#\\includes a whitespace character
 
 #aspiration phrases
-aspirationphrases="(?i)(?<!unlikely\\b|less likely\\b|is unlikely\\b|is less likely\\b|no\\b|not likely\\b|reassuring against\\b|no concern for\\b|am not concerned for\\b|no history of\\b|no recent episodes of\\b)(aspiration pneumonia|likely aspiration|aspiration event)\\b"
+aspirationphrases="(?i)(?<!unlikely|less likely|is unlikely|is less likely|no|not|notlikely|reassuring against|no concern for|am not concerned for|no history of|no recent episodes of|history of|no clear)\\s+(aspiration pneumonia|likely aspiration|aspiration event|presumed aspiration|empirically for aspiration|cover for aspiration|treat for aspiration|aspiration coverage|aspiration treatment)(?!\\s+unlikely|\\s+less likely|\\s+is unlikely|\\s+is less likely|\\s+not likely|\\s+is not likely|\\s+is not needed|\\s+is not necessary)"
 
 #immunization phrases
-unimmunizedphrases="(?i)unimmunized|unvaccinated|partially (vaccinated|immunized)|not (immunized|fully immunized|up to date on immunizations|vaccinated|fully vaccinated)|immunizations (not up to date|are not up to date|incomplete)|incomplete (immunizations|vaccinations)"
+unimmunizedphrases="(?i)unimmunized|unvaccinated|partially\\s+(vaccinated|immunized)|not\\s+(immunized|fully immunized|up to date on immunizations|vaccinated|fully vaccinated)|immunizations\\s+(not up to date|are not up to date|incomplete)|incomplete\\s+(immunizations|vaccinations)"
 
 #critical illness phrases
-criticalillnessphrases="(?i)(?:(?!no|not|not in|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of)\\b)(?:shock|critically ill|sepsis|critical illness|septic)"
+criticalillnessphrases="(?i)(?<!no|not|not in|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of)\\s+(?:shock|critically ill|sepsis|critical illness|septic)"
 
 #pleural effusion
-pleuraleffusionphrases="(?i)(?<!no\\b|no signs of a\\b|no sign of a\\b|not concerned for a\\b|no concern for a\\b|reassured against a\\b|reassuring against a\\b|no evidence of a\\b|not suggestive of a\\b)\\b(moderate pleural effusion|large pleural effusion|moderate parapneumonic effusion|large parapneumonic effusion|loculated pleural effusion|complex pleural effusion)\\b"
+pleuraleffusionphrases="(?i)(?<!no|no signs of a?|no sign of a?|not concerned for a?|no concern for a?|reassured against a?|reassuring against a?|no evidence of a?|not suggestive of a?)\\s+((moderate|large|complex|loculated)\\s+(pleural|parapneumonic)\\s+effusion)"
 
 #immunocomrpomised
-immunesuppressionphrases="(?i)(?<!no\\b|not\\b|no signs of\\b|no sign of\\b|not concerned for\\b|no concern for\\b|reassured against\\b|reassuring against\\b|no evidence of\\b|not suggestive of\\b)\\b(immunosuppressed|immunocompromised|immune compromised|immune suppressed|immunodeficiency|immunodeficient|immune deficiency|immune deficient)\\b"
+immunesuppressionphrases="(?i)(?<!no|not|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of)\\s+(immunosuppressed|immunocompromised|immune compromised|immune suppressed|immunodeficiency|immunodeficient|immune deficiency|immune deficient)"
 
 ```
+
 
 ## Summary of NLP findings
 ```{r,echo=FALSE,message=FALSE}
@@ -649,7 +658,7 @@ notedata<-notedata%>%
 notedata<-notedata %>%
   ungroup()%>%
   mutate(identifiedphrase= if_else(notedata$CSN %in% all_CSN_NLP_list
-                                  ,str_extract(notedata$NoteText,paste(allNLP_phrases,collapse = "|")),"NA"))
+                                  ,str_extract(notedata$NoteText,paste(allNLP_phrases,collapse = "|")),""))
 
 ####for loop 
 for(i in 1:nrow(notedata)) {       # for-loop over rows
@@ -674,9 +683,21 @@ notedatacontext<-notedata%>%
 notedatacontext
 #save CSN list as CSV
 
-write.csv(notedatacontext,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataContext.csv", row.names = FALSE)
+#write.csv(notedatacontext,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataContext.csv", row.names = FALSE)
 
 ```
+
+```{r}
+#testing
+
+#make table of all NLP + full note text to quickly review!
+notedata
+#write.csv(notedata,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataForTesting.csv", row.names = FALSE)
+
+#make table of all without phrase ID + full note text to quickly review!
+
+```
+
 
 ```{r}
 #########TRAIN/TEST ONLY########
