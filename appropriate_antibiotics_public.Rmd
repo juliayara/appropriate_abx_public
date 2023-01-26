@@ -293,7 +293,7 @@ abxculturedata <- abxculturedata %>%
 
 #filter out meds that are in the excluded list for patients who recieved other antimicrobials
 abxculturedata<-abxculturedata%>%
-  filter(!(!CSN %in% excludemedlist & Med %like% paste(exclusionantimicrobials,collapse="|")))
+  filter((!Med %like% paste(exclusionantimicrobials,collapse="|")|(CSN %in% excludemedlist$CSN)))
 
 #pna subset
 pnasub<-abxculturedata %>%
@@ -320,10 +320,9 @@ exclusionsummarytable
 #########FOR TRAIN VALIDATION ONLY########
 #exclusions<-abxculturedata %>%
 #  filter(reasonforexclusions!="Included")
-#write.csv(exclusions,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions.csv", row.names = #FALSE)
+#write.csv(exclusions,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions_1_26.csv", row.names = #FALSE)
 
 ```
-
 
 ```{r, echo=FALSE,message=FALSE, results=FALSE}
 ################################# Apply guidelines to assess antibiotic choice ########################################

@@ -11,3 +11,4 @@ csnlistTRAIN<-sample(csnlistforsample,1000)
 #save CSN list as CSV
 
 write.csv(csnlistTRAIN,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNListTRAIN.csv", row.names = FALSE)
+
