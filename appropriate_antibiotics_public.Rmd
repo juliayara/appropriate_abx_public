@@ -169,7 +169,7 @@ exclusiondiagnoses=c("cystic fibrosis","other specified congenital malformations
 
 #filter out some common infections based on ICD prefixes
 #AO: exclude infectious colitis, "B0*":exclude many viral infections, "J95.851":exclude ventilator assc PNA, "M00*":septic arthritis,  "M01*": septic arthritis,"N39*": exclude UTI
-exclusioninfections<-c("A0*","B0*","J95.851", "M00*","M01*","N39*")
+exclusioninfections<-c(glob2rx("A0*"),glob2rx("B0*"),"J95.851",glob2rx("M00*"),glob2rx("M01*"),glob2rx("N39*"))
 exclusioninfections2=c("abscess","cellulitis", "osteomyelitis",
                      "mastoiditis","lymphangitis","sinusitis","streptococcal pharyngitis","impetigo","lymphadenitis",
                      "omphalitis","aspiration","arthritis due to other bacteria","myositis","sinusitis",'pyelonephritis')
@@ -271,13 +271,19 @@ abxculturedata <- abxculturedata %>%
   if_else(reasonforexclusions!="Included",reasonforexclusions,"Included")))
 
 
-#exclude selected antimicrobials from med list
-abxculturedatanoexcludedmeds<-abxculturedata %>%
-  filter(!abxculturedata$Med %like% paste(exclusionantimicrobials,collapse="|"))
+#exclude selected antimicrobials from med list (first we ID patients who received any antimicrobial that is NOT on the excluded list)
+noexcludemedlist<-abxculturedata%>%
+  select(CSN)%>%
+  filter(!abxculturedata$Med %like% paste(exclusionantimicrobials,collapse = "|"))  
+noexcludemedlist<-unique(noexcludemedlist)
 
-excludemedlist<-abxculturedata %>%
-  select(CSN) %>%
-  filter(!abxculturedata$CSN %in% abxculturedatanoexcludedmeds$CSN)
+#get a list of all unique CSNs to compare to
+allcsn<-abxculturedata %>%
+  select(CSN)
+allcsn<-unique(allcsn)
+
+#Next we find only patients who received ONLY an antimicrobial that is on the excluded list
+excludemedlist<-setdiff(allcsn,noexcludemedlist)
 
 #label "did not receive abx" only for patients who ONLY received one of the excluded medications and no other antimicrobial
 abxculturedata <- abxculturedata %>%
@@ -434,7 +440,7 @@ csnlist<-unique(csnlist$CSN)
 
 #save CSN list as CSV
 
-#write.csv(csnlist,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNList.csv", row.names = FALSE)
+write.csv(csnlist,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNList.csv", row.names = FALSE)
 ```
 
 
@@ -466,10 +472,12 @@ notedata$NoteType=tolower(notedata$NoteType)
 
 ```{r}
 #testing regex with word boundaries
-testingphrases<-"(?i)(RLL|RUL)\\s+(pneumonia)"
+testingphrases<-"(?i)(?<!no|not|not in|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of|risk factors for|at risk for|high risk for|no concern for|not consistent with)\\s+((?:compensated |decompensated )?shock|critically ill|sepsis|critical illness|septic)(?!\\s(screening|screen))"
 
 testphrases<-notedata %>%
   filter(str_detect(notedata$NoteText, testingphrases))
+
+#
 ```
 
 ```{r, echo=FALSE,message=FALSE}
@@ -487,19 +495,19 @@ treatmentfailurephrases<-"(?i)(?!unlikely|less likely|did not|no|has no|didn't|h
 #\\includes a whitespace character
 
 #aspiration phrases
-aspirationphrases="(?i)(?<!unlikely|less likely|is unlikely|is less likely|no|not|notlikely|reassuring against|no concern for|am not concerned for|no history of|no recent episodes of|history of|no clear)\\s+(aspiration pneumonia|likely aspiration|aspiration event|presumed aspiration|empirically for aspiration|cover for aspiration|treat for aspiration|aspiration coverage|aspiration treatment)(?!\\s+unlikely|\\s+less likely|\\s+is unlikely|\\s+is less likely|\\s+not likely|\\s+is not likely|\\s+is not needed|\\s+is not necessary)"
+aspirationphrases="(?i)(?<!unlikely|less likely|is unlikely|is less likely|no|not|not likely|reassuring against(?: an)?|no concern for(?: an)?|am not concerned for(?: an)?|no history (?: of)?(?: an)?|no recent episodes of(?: an)?|history of(?: an)?|no clear|no recent|no obvious|recurrent|denies(?: an)?|low suspicion for(?: an)?|did not witness(?: an)?|multiple)\\s+(aspiration pneumonia|aspiration PNA|aspiration event|presumed aspiration|empirically for aspiration|cover for aspiration|treat for aspiration|aspiration coverage|aspiration treatment)(?!\\s+unlikely|\\s+less likely|\\s+is unlikely|\\s+is less likely|\\s+not likely|\\s+is not likely|\\s+is not needed|\\s+is not necessary)"
 
 #immunization phrases
 unimmunizedphrases="(?i)unimmunized|unvaccinated|partially\\s+(vaccinated|immunized)|not\\s+(immunized|fully immunized|up to date on immunizations|vaccinated|fully vaccinated)|immunizations\\s+(not up to date|are not up to date|incomplete)|incomplete\\s+(immunizations|vaccinations)"
 
 #critical illness phrases
-criticalillnessphrases="(?i)(?<!no|not|not in|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of)\\s+(?:shock|critically ill|sepsis|critical illness|septic)"
+criticalillnessphrases="(?i)(?<!no|not|not in|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of|risk factors for|at risk for|high risk for|no concern for)\\s+(shock|critically ill|sepsis|critical illness|septic)(?!\\s(screening|screen))"
 
 #pleural effusion
-pleuraleffusionphrases="(?i)(?<!no|no signs of a?|no sign of a?|not concerned for a?|no concern for a?|reassured against a?|reassuring against a?|no evidence of a?|not suggestive of a?)\\s+((moderate|large|complex|loculated)\\s+(pleural|parapneumonic)\\s+effusion)"
+pleuraleffusionphrases="(?i)(?<!no|no signs of(?: a)?|no sign of(?: a)?|not concerned for(?: a)?|no concern for(?: a)?|reassured against(?: a)?|reassuring against(?: a)?|no evidence of(?: a)?|not suggestive of(?: a)?|small to)\\s+((moderate|large|complex|loculated)\\s+(?:right\\s|right sided\\s|right-sided\\s|left\\s|left sided\\s|left-sided\\s)?(pleural|parapneumonic)\\s+effusion)(?!\\s+was not visualized)"
 
 #immunocomrpomised
-immunesuppressionphrases="(?i)(?<!no|not|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of)\\s+(immunosuppressed|immunocompromised|immune compromised|immune suppressed|immunodeficiency|immunodeficient|immune deficiency|immune deficient)"
+immunesuppressionphrases="(?i)(?<!no|not|no signs of(?: an)|no sign of(?: an)|not concerned for(?: an)|no concern for(?: an)|reassured against(?: an)|reassuring against(?: an)|no evidence of(?: an)|not suggestive of(?: an)|no (history|hx) of(?: an)|never (?: been)? evaluated for(?: an)|no family (history|hx) of(?: an)?|no fhx of(?: an)?|negative for(?: an))\\s+(immunosuppressed|immunocompromised|immune compromised|immune suppressed|immunodeficiency|immunodeficient|immune deficiency|immune deficient)"
 
 ```
 
@@ -664,7 +672,7 @@ notedata<-notedata %>%
 for(i in 1:nrow(notedata)) {       # for-loop over rows
  notedata$startposition[i]<-((str_locate(notedata$NoteText[i],notedata$identifiedphrase[i])[,1])-120)
  notedata$endposition[i]<-((str_locate(notedata$NoteText[i],notedata$identifiedphrase[i])[,2])+120)
- notedata$context[i]=str_sub(notedata$NoteText[i],start=(notedata$startposition[i]),end=(notedata$endposition[i]))
+ notedata$context[i]=str_sub(notedata$NoteText[i],start=if_else((notedata$startposition[i])>0,(notedata$startposition[i]),"0"),end=(notedata$endposition[i]))
 }
 
 #######Show summary statistics for phrases
@@ -681,9 +689,9 @@ notedatacontext<-notedata%>%
   select(CSN,NoteDT,NoteType,identifiedphrase,context,)
 
 notedatacontext
-#save CSN list as CSV
 
-#write.csv(notedatacontext,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataContext.csv", row.names = FALSE)
+#save CSN list as CSV
+#write.csv(notedatacontext,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataContext_1_12.csv",row.names = FALSE)
 
 ```
 
@@ -692,7 +700,7 @@ notedatacontext
 
 #make table of all NLP + full note text to quickly review!
 notedata
-#write.csv(notedata,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataForTesting.csv", row.names = FALSE)
+write.csv(notedata,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataForTesting1_12.csv", row.names = FALSE)
 
 #make table of all without phrase ID + full note text to quickly review!
 
@@ -710,6 +718,6 @@ abxculturedata
 
 #join main table with NLP note context
 trainreview= maxabxchoice %>% left_join(notedatacontext,by="CSN")
-write.csv(trainreview,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/TrainReview.csv", row.names = FALSE)
+#write.csv(trainreview,"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/TrainReview.csv", row.names = FALSE)
 ```
 
