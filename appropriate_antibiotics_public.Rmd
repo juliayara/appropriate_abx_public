@@ -11,6 +11,13 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r, echo=FALSE, message=FALSE}
+#Getting started: 
+## The only places that you will need to modify in the code are in the code chunks under headers which say "INPUT NEEDED". Switch to outline form in your RMD to easily see these
+## The only lines within the "INPUT NEEDED" Sections that need to be edited by you will be called out with **input needed here** immediately above the variable
+```
+
+
 # Define Variables
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
@@ -30,9 +37,11 @@ library(tinytex)
 
 ##Define Variables: INPUT NEEDED
 ```{r,echo=FALSE, message=FALSE}
-#File path variable: Input your file path here
-abxfile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Antibiotics with Transfer History.csv"
-#column names for antibiotics table, make sure your data is in the below order: 
+#File path variable: Input your file path here. See below for column order info. 
+#**input needed here**
+abxfile="FilePathHere"
+
+#column names for antibiotics table, make sure your data is in the below order. The column NAMES do not matter. All columns are renamed, so only the column ORDER is important. 
 ## 1=contact serial number (encounter ID)
 ## 2=MRN
 ## 3=date of birth
@@ -48,11 +57,18 @@ abxfile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yara
 ## 13=allergy substance 
 ## 14=allergy type (e.g food vs drug allergy)
 
-#file path for output of exclusions to review: 
-exclusionfile<-"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Exclusions3_9.csv"
-notedatacontextfile<-"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteDataContext3_9.csv"
-fullabxreviewfile<-"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/FullReview3_9.csv"
-csnlistfile<-"/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/CSNList3_9.csv"
+
+
+#file path for output of exclusions to review. Rename each of the following paths and give the file a name that would be meaninful to you. Do not change file type (e.g csv)
+#**input needed here**
+exclusionfile<-"Exclusions3_9.csv"
+notedatacontextfile<-"NoteDataContext3_16.csv"
+fullabxreviewfile<-"FullReview3_9.csv"
+csnlistfile<-"CSN3_16.csv"
+
+
+##Note: for help with file paths in R you can refer to this site: https://excelquick.com/r-programming/importing-data-absolute-and-relative-file-paths-in-r/
+##Note: for a very easy workaround to get the file path you can click on "import dataset" in upper right of screen--> from Text (readr)-->Browse & select your file-->copy and past only the file path string into variable above
 ```
 
 
@@ -84,16 +100,19 @@ abxdata<-abxdata %>%
 ## Define  guideline exclusions and guideline choices: INPUT NEEDED
 ```{r, echo=FALSE}
 #Select services of interest
+#**input needed here**
 servicesofinterest<-c('PMA','PMB','PMC','PMD','CCS','PUL','EMR','ADL') 
 
 #services to exclude: this is to exclude patients who were admitted first to another service (like the ICU or a surgical service) and then transferred to PHM
+#**input needed here**
 prePHMservicetoexclude<-c("Intermediate Care Program","Medicine Critical Care","Medical Intensive Care")
 
-#Ages to exclude (e.g. this guideline excludes children less than 3 months old)
+#Minimum age allowed (e.g. this guideline excludes children less than 3 months old)
+#**input needed here**
 minagemonths=3
 
 #Co-morbid conditions to exclude (make all lowercase). This will use the below phrases to search ICD 10 descriptions. It will match if the description contains the phrase. For example: "lupus" will match the ICD10 code for lupus nephritis, and systemic lupus erythematosus. 
-
+#**input needed here**
 exclusiondiagnoses=c("cystic fibrosis","other specified congenital malformations of respiratory system","sickle-cell","hb-ss","sickle cell","leukemia","lymphoma",'neoplasm','transplant',"tuberculosis",
                      "tracheostomy","end stage renal","immunodeficiency",'immunodeficiencies','hypogammaglobulinemia','di george',
                      "rheumatoid arthritis","lupus","muscular dystrophy","spinal muscular atrophy","hypoplastic left heart syndrome",
@@ -102,6 +121,7 @@ exclusiondiagnoses=c("cystic fibrosis","other specified congenital malformations
 
 #filter out some common infections based on ICD prefixes
 #AO: exclude infectious colitis, "B0*":exclude many viral infections, "J95.851":exclude ventilator assc PNA, "M00*":septic arthritis,  "M01*": septic arthritis,"N39*": exclude UTI
+#**input needed here**
 exclusioninfections<-c(glob2rx("A0*"),glob2rx("B0*"),"J95.851",glob2rx("M00*"),glob2rx("M01*"),glob2rx("N39*"))
 
 #similar to comorbid conditions, the below will use the following phrases to search ICD10 descriptions. 
@@ -110,25 +130,39 @@ exclusioninfections2=c("abscess","cellulitis", "osteomyelitis",
                      "omphalitis","aspiration","arthritis due to other bacteria","myositis","sinusitis",'pyelonephritis')
 
 #filter out certain antimicrobials
+#**input needed here**
 exclusionantimicrobials<- c('oseltamivir','bacitracin','nystatin','valacyclovir','hydroxychloroquine','erythromycin')
 
 #identify list of pneumonia ICD codes of interest (these are the codes of pneumonia that you are INCLUDING in your table)
+#**input needed here**
 pnalist<-c('J13', 'J13', 'J14', 'J14', 'J15.0', 'J15.0', 'J15.1', 'J15.1', 'J15.20', 'J15.20', 'J15.211', 'J15.211', 'J15.212', 'J15.212', 'J15.29', 'J15.29', 'J15.3', 'J15.3', 'J15.4', 'J15.4', 'J15.5', 'J15.5', 'J15.6', 'J15.6', 'J15.7', 'J15.7', 'J15.8', 'J15.8', 'J15.9', 'J15.9', 'J16.0', 'J16.0', 'J16.8', 'J17', 'J18.0', 'J18.1', 'J18.8', 'J18.9', 'J85.1', 'J95.851', 'J95.851')
 
+
 #define first line choices 
+#**input needed here**
 firstline=c("amoxicillin","ampicillin") #first line is ampicillin or amoxicillin
+#**input needed here**
 PCNallergy=c("amoxicillin","ampicillin",'penicillin','augmentin','penicillins','amoxicillin-clavulanate') #list of meds that count as PCN allergy
+#**input needed here**
 ifPCNallergy=c("ceftriaxone","clindamycin","cefdinir",'levofloxacin') #if PCN allergy then, ceftriaxone, clindamycin, cefdinir, levofloxacin
+#**input needed here**
 cephalosporinallergy=c("cefdinir","cefotaxime","ceftriaxone","cephalexin","cephalosporins","cefuroxime","cefazolin","cefadroxil","cefotetan","cefoxitin","ceftazidime","cefpodoxime","cefixime","cefepime","ceftaroline") #list of meds that count as cephalosporin allergy
+#**input needed here**
 ifcephalosporinallergy=c("levofloxacin","clindamycin") #if cephalosporin allergy then, levofloxacin, clindamycin
+#**input needed here**
 atypicalfirstline="azithromycin" #first line atypical coverage is azithromycin
+#**input needed here**
 azithroallergy="azithromycin"
+#**input needed here**
 atypicalwithazithroallergy=c("levofloxacin","doxycycline") #if azithromycin allergy then levofloxacin or doxycycline
 
+
 #if over 4 then azithromycin is potentially appropriate
+#**input needed here**
 ageforazithro=4 
 
 #define guidelinechoices (if unimmunized then--> Ceftriaxone, cefotaxime, cefdinir, levofloxacin)
+#**input needed here**
 treatmentunimmunized=c("ceftriaxone","cefotaxime","cefdinir","levofloxacin")
 
 ```
@@ -368,10 +402,9 @@ summarytable2<-maxabxchoice%>%
   summarise(count=n_distinct(CSN))%>%
   ungroup()%>%
   arrange(label,desc(count))
-summarytable2
 
 grandtotal2<-c("Grand Total","",length(unique(maxabxchoice$CSN)))
-summarytable2<-rbind(summarytable2,"",grandtotal2)
+summarytable2<-rbind(summarytable2,grandtotal2)
 summarytable2
 ```
 
@@ -392,7 +425,8 @@ write.csv(csnlist,csnlistfile, row.names = FALSE)
 ##Import Note Data: INPUT NEEDED
 ```{r, echo=FALSE}
 #File path variable: Input your file path to note contents file here
-notefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/NoteContents_1_30.csv"
+#**input needed here**
+notefile="/Volumes/CI Program Faculty/+Fellow Franchise/Yarahuan/Protected/Notes with Note Contents to delete.csv"
 #NoteData Columns
 #1=CSN, 2=NoteDT, 3=NoteType, 4=NoteText
 ```
@@ -400,11 +434,8 @@ notefile="/Volumes/dmcommon/_DM.Private/CI Program Faculty/+Fellow Franchise/Yar
 ##Create NLP Phrases: INPUT NEEDED
 ```{r, echo=FALSE,message=FALSE}
 ################################# Create your NLP phrases ########################################################
-#treatment failure phrases
-treatmentfailurephrases<-"(?i)(?<!(unlikely|less likely|did not|no|has no|didn't|hasn't|has not yet|hasn't yet|did not yet|didn't yet)\\s)(treatment failure|failed outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin|HD amoxicillin)|failure of outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|despite\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin |outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin))|(?:in spite of |s p|sp|s/p)\\s+outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|started on\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)\\s+as\\s+(?:outpatient|an outpatient))"
-
 #NLP notes: 
-## General structure: (negative look behind asssertion-- things that should NOT PRECEED our phrases)(matching phrases)(negative look ahead assertion-- things that should NOT FOLLOW our phrases)
+## General structure of each regex: 1. (negative look behind asssertion-- things that should NOT PRECEED our phrases) 2. (matching phrases) 3.(negative look ahead assertion-- things that should NOT FOLLOW our phrases)
 ## \\s+ is used to match any whitespace characters (such as spaces, tabs, or newlines) that might appear between words in the phrases being matched.
 ## (?i) - This is a flag that makes the search case-insensitive. It means that the regex will match both uppercase and lowercase letters.
 ## (?:) non-capturing group to group together common parts of the phrases. 
@@ -413,19 +444,30 @@ treatmentfailurephrases<-"(?i)(?<!(unlikely|less likely|did not|no|has no|didn't
 ## (?:) is used to create a non-capturing group within a regular expression. This means that the group is used for matching purposes, but the content that it matches is not captured and stored as a separate group for later use in the regular expression or in the code that uses the regular expression. For example:  history of(?: an)?, the (?:) syntax is used again to create a non-capturing group. The group contains the string " an" with a ? after it, which means that the an is optional. This group is preceded by the string "history of".
 
 
+#treatment failure phrases
+#**input needed here**
+treatmentfailurephrases<-"(?i)(?<!(unlikely|less likely|did not|no|has no|didn't|hasn't|has not yet|hasn't yet|did not yet|didn't yet)\\s)(treatment failure|failed outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin|HD amoxicillin)|failure of outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|despite\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin |outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin))|(?:in spite of |s p|sp|s/p)\\s+outpatient\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)|started on\\s+(?:treatment|therapy|antibiotics|antibiotic|amoxicillin|HD amoxicillin|high-dose amoxicillin|high dose amoxicillin)\\s+as\\s+(?:outpatient|an outpatient))"
+
+
+
 #aspiration phrases
+#**input needed here**
 aspirationphrases="(?i)(?<!unlikely|less likely|is unlikely|is less likely|no|not|not likely|reassuring against(?: an)?|no concern for(?: an)?|am not concerned for(?: an)?|no history (?: of)?(?: an)?|no recent episodes of(?: an)?|history of(?: an)?|no clear|no recent|no obvious|recurrent|denies(?: an)?|low suspicion for(?: an)?|did not witness(?: an)?|multiple)\\s+(aspiration pneumonia|aspiration PNA|aspiration event|presumed aspiration|empirically for aspiration|cover for aspiration|treat for aspiration|aspiration coverage|aspiration treatment)(?!\\s+unlikely|\\s+less likely|\\s+is unlikely|\\s+is less likely|\\s+not likely|\\s+is not likely|\\s+is not needed|\\s+is not necessary)"
 
 #immunization phrases
+#**input needed here**
 unimmunizedphrases="(?i)unimmunized|unvaccinated|partially\\s+(vaccinated|immunized)|not\\s+(immunized|fully immunized|up to date on immunizations|vaccinated|fully vaccinated)|immunizations\\s+(not up to date|are not up to date|incomplete)|incomplete\\s+(immunizations|vaccinations)"
 
 #critical illness phrases
+#**input needed here**
 criticalillnessphrases="(?i)(?<!no|not|not in|no signs of|no sign of|not concerned for|no concern for|reassured against|reassuring against|no evidence of|not suggestive of|risk factors for|at risk for|high risk for|no concern for)\\s+(shock|critically ill|sepsis|critical illness|septic)(?!\\s(screening|screen))"
 
 #pleural effusion
+#**input needed here**
 pleuraleffusionphrases="(?i)(?<!no|no signs of(?: a)?|no sign of(?: a)?|not concerned for(?: a)?|no concern for(?: a)?|reassured against(?: a)?|reassuring against(?: a)?|no evidence of(?: a)?|not suggestive of(?: a)?|small to)\\s+((moderate|large|complex|loculated)\\s+(?:right\\s|right sided\\s|right-sided\\s|left\\s|left sided\\s|left-sided\\s)?(pleural|parapneumonic)\\s+effusion)(?!\\s+was not visualized)"
 
 #immunocomrpomised
+#**input needed here**
 immunesuppressionphrases="(?i)(?<!no|not|no signs of(?: an)|no sign of(?: an)|not concerned for(?: an)|no concern for(?: an)|reassured against(?: an)|reassuring against(?: an)|no evidence of(?: an)|not suggestive of(?: an)|no (history|hx) of(?: an)|never (?: been)? evaluated for(?: an)|no family (history|hx) of(?: an)?|no fhx of(?: an)?|negative for(?: an))\\s+(immunosuppressed|immunocompromised|immune compromised|immune suppressed|immunodeficiency|immunodeficient|immune deficiency|immune deficient)"
 
 ```
@@ -618,11 +660,11 @@ for(i in 1:nrow(notedata)) {       # for-loop over rows
  notedata$context[i]=str_sub(notedata$NoteText[i],start=if_else((notedata$startposition[i])>0,(notedata$startposition[i]),"0"),end=(notedata$endposition[i]))
 }
 #labeldetailed added to notedata
-labeldetailed <- maxabxchoice %>%
-   select(CSN,labeldetailed)
+labeldetailedlist <- maxabxchoice %>%
+   select(CSN,labeldetailed, Med)
 
 #join note data with maxabx data to get labels
-notedata <- merge(x=notedata,y=labeldetailed, 
+notedata <- merge(x=notedata,y=labeldetailedlist, 
              by="CSN")
 
 
@@ -640,7 +682,7 @@ notedatasummary<-notedata %>%
 
 ####Creat table for easy phrase/context manual review
 notedatacontext<-notedata%>%
-  select(CSN,NoteDT,NoteType,identifiedphrase,context,labeldetailed)
+  select(CSN,Med,NoteDT,NoteType,identifiedphrase,context,labeldetailed)
 
 #delete redundant rows (example blank rows, when other rows have phrase ID & context)
 notedatacontext <- notedatacontext %>%
