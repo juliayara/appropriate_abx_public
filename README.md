@@ -3,7 +3,8 @@ The goal of appropriate_antibiotics is to ingest a dataset of patients with pneu
 
 ## Input Columns
 
-### First Query, Columns for antibiotics table (make sure your data is in the below order, but column names do not matter, so no need to rename prior to ingestion by algorithm)
+### First Query
+Columns for antibiotics table (make sure your data is in the below order, but column names do not matter, so no need to rename prior to ingestion by algorithm)
 - 1=contact serial number (encounter ID)
 - 2=MRN
 - 3=date of birth
@@ -19,7 +20,8 @@ The goal of appropriate_antibiotics is to ingest a dataset of patients with pneu
 - 13=allergy substance 
 - 14=allergy type (e.g food vs drug allergy)
 
-### Second Query: This query will be to gather note text from the list of CSNs prior to the "Start NLP" stage
+### Second Query
+This query will be to gather note text from the list of CSNs prior to the "Start NLP" stage
 
 - 1=contact serial number (encounter ID)
 - 2=NoteDT (Note date & time)
