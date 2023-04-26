@@ -1,4 +1,12 @@
 # appropriate_abx_public
+**© 2023 Boston Children’s Hospital. All Rights Reserved**
+
+
+**NOTICE: Information Purposes Only – No Medical Advice/No Commercial Purposes**
+
+This Material is offered for educational and information purposes only and is not to be used for any commercial purposes. This Material is not meant as a substitute for independent medical judgment or the advice of a qualified physician or healthcare professional. This Material is not intended to provide medical advice or clinical services to patients, to verify or approve medical information or credentials, or to make any medical referrals. This Material does not provide professional or medical advice or recommend any particular medical device or service, including recommendations or endorsements. Users who choose to use information or recommendations made available by this Material do so at their own risk and should not rely on that information as professional medical advice or use it to replace any relationship with their physicians or other qualified healthcare professionals.
+
+## Goal
 The goal of appropriate_antibiotics is to ingest a dataset of patients with pneumonia and automatically label the first antibiotic as having recieved the appropriate antibiotic selection vs not to then allow for a small amount of manual review to verify flagged cases.
 
 ## Input Columns
